@@ -6,6 +6,38 @@
 
 ---
 
+## 0. Uygulama Durumu (Faz 1 — Temel İskelet)
+
+**Kod konumu:** `C:\Users\Demir\Documents\ges-teknik\` (npm paket adı küçük harf zorunlu olduğu için klasör adı küçük harfle oluşturuldu; Windows dosya sistemi büyük/küçük harfe duyarsız olduğu için erişim aynıdır).
+
+Tamamlananlar:
+- [x] Next.js 16 (App Router, Turbopack) + TypeScript + Tailwind CSS 4 iskeleti
+- [x] Prisma 7 şeması: `User, Role, Customer, Ticket, Stage, StageHistory, Attachment, Part, PartUsage` (bkz. `prisma/schema.prisma`)
+- [x] Neon serverless driver adapter (`@prisma/adapter-neon`) entegrasyonu — `src/lib/prisma.ts`
+- [x] Başlangıç seed script'i (roller + varsayılan 6 aşama) — `prisma/seed.ts`
+- [x] Apple HIG referanslı tasarım token'ları (sistem renkleri, radius, tipografi) — `src/app/globals.css`
+- [x] Masaüstü sidebar + mobil bottom tab bar (banka uygulaması UX'i) — `src/components/layout/`
+- [x] Dashboard, Kayıtlar, Kayıt Detayı (zaman çizelgesi), Raporlar, Ayarlar sayfaları — şu an **mock veriyle** (`src/lib/mock-data.ts`)
+- [x] Auth.js (next-auth v5) Credentials provider + rol bazlı proxy koruması (`src/auth.ts`, `src/proxy.ts`)
+- [x] Yerel git deposu ve ilk commit
+
+Ayrıca tamamlananlar:
+- [x] **Neon veritabanı** — "GES Teknik" adında Neon projesi oluşturuldu (AWS Europe Central 1 / Frankfurt), şema migrate edildi, roller/aşamalar/ilk admin kullanıcısı seed edildi. Bağlantı dizesi `.env` içinde (repoya commit edilmez).
+  - Admin girişi: `admin@gesteknik.com` / `GesTeknik2026!` — **ilk fırsatta değiştirilmeli.**
+- [x] **GitHub reposu** — https://github.com/Luyome/GES-Teknik push edildi, `main` branch.
+
+Yapılacaklar:
+- [ ] **Vercel projesi** — GitHub reposu Vercel'e bağlanmalı, `DATABASE_URL` ve `AUTH_SECRET` environment variable olarak Vercel'de tanımlanmalı.
+- [ ] Mock veri yerine gerçek Prisma sorguları (dashboard/kayıtlar/rapor sayfaları)
+- [ ] İlk admin şifresinin değiştirilmesi / kullanıcı yönetimi ekranı
+
+### Kurulum sırasında öğrenilen önemli teknik notlar
+- **Next.js 16**: `middleware.js` kaldırıldı, yerine **`proxy.js`** geldi (davranış aynı, sadece isim değişti). Proje `src/proxy.ts` kullanıyor.
+- **Prisma 7**: Yeni nesil `"prisma-client"` generator (ESM, çıktı `src/generated/prisma`) ve **driver adapter zorunluluğu** var (artık gömülü query engine yerine `@prisma/adapter-neon` gibi bir adapter ile bağlanılıyor). Ayrıca `prisma.config.ts` dosyası `package.json`'daki eski `prisma` alanının yerini aldı.
+- **Auth.js (next-auth v5)**: Edge Runtime'da çalışan `proxy.ts`, Prisma/Node API'si içeremediği için config ikiye bölündü: `src/auth.config.ts` (edge-uyumlu, sağlayıcısız) ve `src/auth.ts` (Node runtime, Credentials + Prisma).
+
+---
+
 ## 1. Proje Özeti
 
 - **Proje adı:** GES Teknik

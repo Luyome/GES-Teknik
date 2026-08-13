@@ -3,6 +3,7 @@
 // Çalıştırma: npx prisma db seed
 
 import "dotenv/config";
+import bcrypt from "bcryptjs";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaNeon } from "@prisma/adapter-neon";
 
@@ -49,6 +50,24 @@ async function main() {
         responsibleRoleId: roleRecords.get(stage.role)!,
       },
     });
+  }
+
+  // İlk admin kullanıcısı — sadece daha önce hiç kullanıcı yoksa oluşturulur.
+  const userCount = await prisma.user.count();
+  if (userCount === 0) {
+    const adminEmail = process.env.SEED_ADMIN_EMAIL ?? "admin@gesteknik.com";
+    const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? "GesTeknik2026!";
+    const hashed = await bcrypt.hash(adminPassword, 10);
+
+    await prisma.user.create({
+      data: {
+        name: "Admin",
+        email: adminEmail,
+        password: hashed,
+        roleId: roleRecords.get("ADMIN")!,
+      },
+    });
+    console.log(`İlk admin kullanıcısı oluşturuldu: ${adminEmail}`);
   }
 
   console.log("Seed tamamlandı: roller ve aşamalar oluşturuldu.");
