@@ -1,7 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
-import { createTicketAction } from "./actions";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 const PRIORITY_OPTIONS: { value: string; label: string }[] = [
   { value: "LOW", label: "Düşük" },
@@ -13,11 +13,36 @@ const PRIORITY_OPTIONS: { value: string; label: string }[] = [
 const fieldClass =
   "w-full rounded-[var(--radius-control)] border border-border bg-surface-2 px-3.5 py-3 text-[16px] outline-none focus:ring-2 focus:ring-blue";
 
+// Not: Kayıt oluşturma bilinçli olarak bir Server Action değil, /api/tickets
+// Route Handler'ına yapılan bir fetch çağrısı. Bkz. src/app/api/tickets/route.ts
+// üstündeki not.
 export function NewTicketForm() {
-  const [state, formAction, isPending] = useActionState(createTicketAction, undefined);
+  const router = useRouter();
+  const [error, setError] = useState<string | undefined>();
+  const [isPending, setIsPending] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(undefined);
+    setIsPending(true);
+    try {
+      const formData = new FormData(e.currentTarget);
+      const res = await fetch("/api/tickets", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Bilinmeyen bir hata oluştu.");
+        return;
+      }
+      router.push(`/tickets/${data.id}`);
+    } catch {
+      setError("Bağlantı hatası, lütfen tekrar deneyin.");
+    } finally {
+      setIsPending(false);
+    }
+  }
 
   return (
-    <form action={formAction} className="space-y-4 max-w-lg">
+    <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
       <div className="space-y-1.5">
         <label htmlFor="customerName" className="text-[13px] text-label-secondary">
           Müşteri Adı
@@ -83,7 +108,7 @@ export function NewTicketForm() {
         </select>
       </div>
 
-      {state?.error && <p className="text-[13px] text-red">{state.error}</p>}
+      {error && <p className="text-[13px] text-red">{error}</p>}
 
       <button
         type="submit"

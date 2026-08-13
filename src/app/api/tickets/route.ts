@@ -1,29 +1,21 @@
-"use server";
-
-import { redirect } from "next/navigation";
-import { unstable_noStore as noStore, revalidatePath } from "next/cache";
+import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import type { TicketPriority } from "@/generated/prisma/enums";
 
-export type CreateTicketState = { error?: string };
-
-export async function createTicketAction(
-  _prevState: CreateTicketState | undefined,
-  formData: FormData
-): Promise<CreateTicketState> {
-  // Bu route (/tickets/new) daha önce statik/ISR olarak prerender edildiği
-  // için Vercel'in route cache'i bu action'ın çağrıldığı istekleri de
-  // önbellekten (stale, oturumsuz bir kopyadan) karşılamaya devam
-  // edebiliyordu. noStore() bu action'ı her koşulda önbellek dışı bırakır.
-  noStore();
-  revalidatePath("/tickets/new");
-
+// Yeni kayıt oluşturma — bilinçli olarak bir Server Action DEĞİL, bir Route
+// Handler. Next.js 16.3.0 + Vercel Fluid Compute üzerinde Server Actions'ın
+// (POST + "use server") oturum çerezini bazı isteklerde güvenilir biçimde
+// okuyamadığı gözlemlendi (auth() Server Action içinde tutarsız biçimde
+// null dönüyordu), aynı auth() çağrısı bir Route Handler'da hem GET hem
+// POST'ta sorunsuz çalıştı. Bkz. PROJECT.md.
+export async function POST(request: Request) {
   const session = await auth();
   if (!session?.user?.id) {
-    return { error: "Oturum bulunamadı, lütfen tekrar giriş yapın." };
+    return NextResponse.json({ error: "Oturum bulunamadı, lütfen tekrar giriş yapın." }, { status: 401 });
   }
 
+  const formData = await request.formData();
   const customerName = (formData.get("customerName") as string | null)?.trim();
   const customerPhone = (formData.get("customerPhone") as string | null)?.trim();
   const productInfo = (formData.get("productInfo") as string | null)?.trim();
@@ -31,14 +23,19 @@ export async function createTicketAction(
   const priority = (formData.get("priority") as TicketPriority | null) ?? "NORMAL";
 
   if (!customerName || !productInfo || !issueDescription) {
-    return { error: "Müşteri adı, ürün bilgisi ve arıza tanımı zorunludur." };
+    return NextResponse.json(
+      { error: "Müşteri adı, ürün bilgisi ve arıza tanımı zorunludur." },
+      { status: 400 }
+    );
   }
 
-  let ticketId: string;
   try {
     const firstStage = await prisma.stage.findFirst({ orderBy: { order: "asc" } });
     if (!firstStage) {
-      return { error: "Tanımlı bir iş akışı aşaması bulunamadı. Önce Ayarlar'dan aşama tanımlayın." };
+      return NextResponse.json(
+        { error: "Tanımlı bir iş akışı aşaması bulunamadı. Önce Ayarlar'dan aşama tanımlayın." },
+        { status: 400 }
+      );
     }
 
     // Aynı isimli müşteri varsa onu kullan, yoksa yeni oluştur (basit eşleştirme).
@@ -75,11 +72,13 @@ export async function createTicketAction(
         },
       },
     });
-    ticketId = ticket.id;
-  } catch (err) {
-    console.error("[createTicketAction] error:", err);
-    return { error: `Kayıt oluşturulamadı: ${err instanceof Error ? err.message : String(err)}` };
-  }
 
-  redirect(`/tickets/${ticketId}`);
+    return NextResponse.json({ id: ticket.id });
+  } catch (err) {
+    console.error("[POST /api/tickets] error:", err);
+    return NextResponse.json(
+      { error: `Kayıt oluşturulamadı: ${err instanceof Error ? err.message : String(err)}` },
+      { status: 500 }
+    );
+  }
 }
