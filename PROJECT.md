@@ -26,8 +26,11 @@ Ayrıca tamamlananlar:
   - Admin girişi: `admin@gesteknik.com` / `GesTeknik2026!` — **ilk fırsatta değiştirilmeli.**
 - [x] **GitHub reposu** — https://github.com/Luyome/GES-Teknik push edildi, `main` branch.
 
+- [x] **Vercel projesi** — `Luyome/GES-Teknik` reposu Vercel'e (Laeroth takımı) bağlandı, `DATABASE_URL` ve `AUTH_SECRET` environment variable olarak tanımlandı, ilk deployment yapıldı ve gerçek Neon veritabanına karşı giriş test edildi.
+  - Canlı URL: https://ges-teknik-mx920jbhr-laeroth.vercel.app
+  - `main` branch'e her push otomatik olarak yeni bir production deployment tetikler.
+
 Yapılacaklar:
-- [ ] **Vercel projesi** — GitHub reposu Vercel'e bağlanmalı, `DATABASE_URL` ve `AUTH_SECRET` environment variable olarak Vercel'de tanımlanmalı.
 - [ ] Mock veri yerine gerçek Prisma sorguları (dashboard/kayıtlar/rapor sayfaları)
 - [ ] İlk admin şifresinin değiştirilmesi / kullanıcı yönetimi ekranı
 
