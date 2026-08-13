@@ -27,17 +27,21 @@ Ayrıca tamamlananlar:
 - [x] **GitHub reposu** — https://github.com/Luyome/GES-Teknik push edildi, `main` branch.
 
 - [x] **Vercel projesi** — `Luyome/GES-Teknik` reposu Vercel'e (Laeroth takımı) bağlandı, `DATABASE_URL` ve `AUTH_SECRET` environment variable olarak tanımlandı, ilk deployment yapıldı ve gerçek Neon veritabanına karşı giriş test edildi.
-  - Canlı URL: https://ges-teknik-mx920jbhr-laeroth.vercel.app
+  - Canlı URL: https://ges-teknik.vercel.app
   - `main` branch'e her push otomatik olarak yeni bir production deployment tetikler.
 
+- [x] **Gerçek veri sorguları** — Dashboard, Kayıtlar, Kayıt Detayı, Ayarlar artık mock veri değil, `src/lib/data/tickets.ts` üzerinden gerçek Prisma/Neon sorguları kullanıyor.
+- [x] **Yeni Kayıt akışı** — `/tickets/create` formu, `/api/tickets` Route Handler'ına POST atarak gerçek `Ticket` + ilk `StageHistory` kaydı oluşturuyor. Hem yerelde hem production'da (Vercel) uçtan uca test edildi.
+
 Yapılacaklar:
-- [ ] Mock veri yerine gerçek Prisma sorguları (dashboard/kayıtlar/rapor sayfaları)
 - [ ] İlk admin şifresinin değiştirilmesi / kullanıcı yönetimi ekranı
+- [ ] Raporlama modülü (Faz 3)
 
 ### Kurulum sırasında öğrenilen önemli teknik notlar
 - **Next.js 16**: `middleware.js` kaldırıldı, yerine **`proxy.js`** geldi (davranış aynı, sadece isim değişti). Proje `src/proxy.ts` kullanıyor.
 - **Prisma 7**: Yeni nesil `"prisma-client"` generator (ESM, çıktı `src/generated/prisma`) ve **driver adapter zorunluluğu** var (artık gömülü query engine yerine `@prisma/adapter-neon` gibi bir adapter ile bağlanılıyor). Ayrıca `prisma.config.ts` dosyası `package.json`'daki eski `prisma` alanının yerini aldı.
 - **Auth.js (next-auth v5)**: Edge Runtime'da çalışan `proxy.ts`, Prisma/Node API'si içeremediği için config ikiye bölündü: `src/auth.config.ts` (edge-uyumlu, sağlayıcısız) ve `src/auth.ts` (Node runtime, Credentials + Prisma).
+- **Kayıt oluşturma neden bir Route Handler (`/api/tickets`), Server Action değil**: `/tickets/create` formu bilinçli olarak `fetch("/api/tickets")` kullanıyor, `"use server"` action değil. Sebep bir framework kısıtı değildi — uzun bir hata ayıklama sürecinde asıl neden şu çıktı: `AppShell`'deki "Çıkış Yap" butonu da bir `<form><button type="submit">` içeriyor ve sayfada DOM sırasına göre kayıt formundan ÖNCE geliyor; tarayıcıda `document.querySelector('button[type="submit"]')` ile yapılan otomasyon testleri yanlışlıkla hep çıkış butonuna tıklıyordu, bu da "her form gönderiminde /login'e düşme" yanılsaması yarattı. Route Handler'a geçiş gereksizdi ama zararsız ve sağlam bir mimari, olduğu gibi bırakıldı. **Ders:** birden fazla `<form>`/submit butonu olan sayfalarda otomasyon testlerinde her zaman en yakın forma scope'lanmış seçici kullanın (`el.closest('form').querySelector(...)`), sayfa genelinde `querySelector('button[type="submit"]')` kullanmayın.
 
 ---
 
