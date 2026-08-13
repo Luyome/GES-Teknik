@@ -20,7 +20,7 @@ export default async function TicketsPage() {
           </p>
         </div>
         <Link
-          href="/tickets/new"
+          href="/tickets/create"
           className="shrink-0 rounded-[var(--radius-pill)] bg-blue text-white text-[15px] font-medium px-4 py-2.5"
         >
           + Yeni Kayıt
