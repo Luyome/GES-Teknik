@@ -1,10 +1,14 @@
 import { Card } from "@/components/ui/Card";
-import { STAGES } from "@/lib/mock-data";
+import { getAllStages } from "@/lib/data/tickets";
+
+export const dynamic = "force-dynamic";
 
 // Ayarlar — iş akışı aşama tanımlarının yönetimi (PROJECT.md Bölüm 2:
 // "aşama zinciri parametrik/yapılandırılabilir olmalı"). Şu an salt okunur
-// önizleme; düzenleme Faz 2'de Prisma `Stage` modeli üzerinden eklenecek.
-export default function SettingsPage() {
+// önizleme; düzenleme Faz 2'de eklenecek.
+export default async function SettingsPage() {
+  const stages = await getAllStages();
+
   return (
     <div className="space-y-6">
       <header>
@@ -15,12 +19,12 @@ export default function SettingsPage() {
       </header>
 
       <Card className="p-0 divide-y divide-border">
-        {STAGES.map((stage, i) => (
-          <div key={stage} className="flex items-center gap-3 px-4 py-3.5">
+        {stages.map((stage) => (
+          <div key={stage.id} className="flex items-center gap-3 px-4 py-3.5">
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-surface-2 text-[12px] font-medium text-label-secondary">
-              {i + 1}
+              {stage.order}
             </span>
-            <span className="text-[15px]">{stage}</span>
+            <span className="text-[15px]">{stage.name}</span>
           </div>
         ))}
       </Card>
