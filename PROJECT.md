@@ -1,0 +1,183 @@
+# GES Teknik — Proje Şartnamesi
+
+> Bu doküman, GES Teknik projesine dair tüm karar, gereksinim ve planların tutulduğu tek referans kaynağıdır. Proje ilerledikçe güncellenmeli, yeni kararlar buraya eklenmelidir.
+
+**Son güncelleme:** 2026-08-13
+
+---
+
+## 1. Proje Özeti
+
+- **Proje adı:** GES Teknik
+- **Sektör referansı:** [gesteknik.com](https://gesteknik.com/) — güneş enerjisi sistemleri (GES) teknik servis/bakım sektörü.
+- **Amaç:** Bir teknik servis yönetim uygulaması. Servise giren bir ürün/parça/varlığın, tanımlı iş akışı aşamalarından geçerek sonuçlandırılmasını yönetir.
+- **Kritik iş değeri:** Yönetimin, sisteme giren her kaydın **o anda hangi aşamada olduğunu canlı izleyebilmesi** ve giriş-çıkış arasındaki tüm süreci **raporlayabilmesi**. Bu, projenin en önemli gereksinimidir — dashboard ve raporlama modülleri buna göre tasarlanacak.
+
+---
+
+## 2. İş Akışı (Workflow) Modeli
+
+Sistemin kalbi, bir kaydın (ürün/parça/cihaz) girişten çıkışa kadar geçtiği **aşama (stage) zinciridir**. Her aşamayı belirli bir rol/kullanıcı kontrol eder ve bir sonraki aşamaya onay/red/iade ile geçiş sağlar.
+
+### Örnek aşama zinciri (başlangıç taslağı — netleştirilecek)
+1. **Kayıt / Giriş** — Ürün sisteme kaydedilir (müşteri bilgisi, ürün bilgisi, giriş nedeni/arıza tanımı, giriş tarihi, opsiyonel fotoğraf).
+2. **Ön İnceleme** — İlk teknik değerlendirme, önceliklendirme, ilgili teknisyene/departmana atama.
+3. **Teknik Değerlendirme / Arıza Tespiti** — Detaylı analiz, gereken parça/işlem belirlenir.
+4. **Onarım / İşlem** — Fiili müdahale, kullanılan parçalar ve yapılan işlemler kaydedilir.
+5. **Kalite Kontrol** — Yapılan işin doğrulanması, testten geçirilmesi.
+6. **Teslim / Çıkış** — Müşteriye teslim, çıkış kaydı, kapanış.
+
+### Aşama kuralları
+- Her aşamanın bir **sorumlu rolü** ve opsiyonel olarak bir **sorumlu kişisi** vardır.
+- Bir aşama şu sonuçlardan biriyle kapanır: **Onay (sonraki aşamaya geçiş)**, **Red/İade (önceki aşamaya geri dönüş)**, **İptal**.
+- Her aşama geçişinde **zaman damgası, kullanıcı, not** otomatik loglanır (audit trail).
+- Aşama süreleri ölçülür (SLA/darboğaz tespiti için).
+- Aşama zinciri **parametrik/yapılandırılabilir** olmalı (ileride yeni aşama eklenebilmeli — sabit kod değil, veri odaklı tasarım).
+
+> **Not:** Yukarıdaki aşama isimleri başlangıç varsayımıdır, gerçek saha süreciyle birlikte netleştirilecektir (bkz. Bölüm 11).
+
+---
+
+## 3. Roller ve Yetkilendirme
+
+| Rol | Yetki Özeti |
+|---|---|
+| **Admin / Yönetici** | Tüm kayıtları görür, tüm raporlara erişir, kullanıcı/rol yönetimi yapar, iş akışı tanımlarını düzenler. |
+| **Servis Sorumlusu** | Kayıt oluşturur, aşama atamalarını yapar, genel süreci yönetir. |
+| **Teknisyen** | Kendisine atanan kayıtlarda işlem yapar, aşama günceller, not/parça girer. |
+| **Kalite Kontrol** | Tamamlanan işleri denetler, onay/red verir. |
+| **Müşteri / Görüntüleyici (opsiyonel)** | Sadece kendi kaydının durumunu görüntüleyebilir (salt okunur, ileride eklenebilir). |
+
+> Rol isimleri ve yetki matrisi saha süreciyle birlikte kesinleştirilecek.
+
+---
+
+## 4. İzleme ve Raporlama Gereksinimleri
+
+Bu bölüm projenin en kritik gereksinimidir.
+
+- **Canlı Durum Panosu (Dashboard):** Tüm aktif kayıtların hangi aşamada olduğunu gösteren gerçek zamanlıya yakın görünüm (kanban tarzı aşama sütunları önerilir).
+- **Kayıt Zaman Çizelgesi (Timeline):** Her kayıt için giriş anından itibaren tüm aşama geçişlerinin, kim tarafından, ne zaman yapıldığının kronolojik görünümü.
+- **Aşama Bazlı Süre Metrikleri:** Her aşamada ortalama/maksimum bekleme süresi, darboğaz (bottleneck) tespiti.
+- **Filtreleme / Arama:** Tarih aralığı, müşteri, ürün tipi, aşama, sorumlu kişi, durum bazlı filtreleme.
+- **Raporlama:** Belirli dönem için tamamlanan/bekleyen/geciken kayıt raporları; dışa aktarma (PDF/Excel).
+- **Bildirimler (ileride):** Aşama geçişlerinde ilgili kullanıcıya bildirim (e-posta/uygulama içi).
+
+---
+
+## 5. Veri Modeli Taslağı
+
+Ana varlıklar (Prisma şeması bu taslağa göre detaylandırılacak):
+
+- **User** — id, ad, email, rol, şifre (hash), durum.
+- **Role** — id, ad, yetki listesi.
+- **Customer** — id, ad, iletişim bilgileri.
+- **Item / Ticket (Servis Kaydı)** — id, müşteri, ürün bilgisi, giriş tarihi, çıkış tarihi, mevcut aşama, durum, öncelik.
+- **Stage (Aşama Tanımı)** — id, ad, sıra no, sorumlu rol, yapılandırılabilir.
+- **StageHistory / Log** — id, ticketId, stageId, kullanıcı, giriş zamanı, çıkış zamanı, sonuç (onay/red/iptal), not.
+- **Attachment / Note** — id, ticketId, dosya/metin, oluşturan kullanıcı, zaman.
+- **Part (kullanılan parça, opsiyonel)** — id, ad, stok bilgisi, kullanılan ticket.
+
+### İlişkiler (özet)
+- Bir `Ticket`, bir `Customer`'a aittir, çok sayıda `StageHistory` kaydına sahiptir.
+- Bir `StageHistory`, bir `Stage`'e ve bir `User`'a referans verir.
+- Bir `User`, bir `Role`'e sahiptir.
+
+---
+
+## 6. Ekran / Sayfa Listesi
+
+- **Giriş (Login)**
+- **Dashboard** — canlı aşama durumu, özet metrikler
+- **Kayıt Listesi** — tüm servis kayıtları, filtrelenebilir tablo/kart görünümü
+- **Kayıt Detayı** — zaman çizelgesi, mevcut aşama, işlem geçmişi, notlar/ekler
+- **Yeni Kayıt Oluşturma**
+- **Aşama İşlem Ekranı** — teknisyenin kendine atanan kaydı işlediği ekran
+- **Raporlar** — süre analizleri, darboğaz raporları, dışa aktarma
+- **Kullanıcı / Rol Yönetimi** (Admin)
+- **Ayarlar** — iş akışı aşama tanımları, genel sistem ayarları
+
+### Mobil öncelikli ekranlar
+- Dashboard (özet kartlar)
+- Kayıt Listesi (kart görünümü, hızlı filtre)
+- Kayıt Detayı (zaman çizelgesi)
+- Aşama İşlem Ekranı (teknisyen sahada hızlı güncelleme yapabilmeli)
+
+---
+
+## 7. Tasarım Dili
+
+### Apple Human Interface Guidelines (HIG) prensipleri
+- **Netlik (Clarity):** Sade tipografi (SF Pro benzeri sistem fontu — web'de `-apple-system` / Inter), yeterli boşluk, gereksiz süslemeden kaçınma.
+- **Derinlik (Depth):** Katmanlı arayüz, ince gölgeler, blur/vibrancy efektleri (modallar, alt menüler için).
+- **Hiyerarşi:** Net başlık/alt başlık ayrımı, boyut ve renk kontrastıyla önem sırası.
+- **Sistem Renkleri:** Apple'ın semantik renk yaklaşımı (başarı=yeşil, uyarı=turuncu, hata=kırmızı, bilgi=mavi) — durum rozetlerinde tutarlı kullanım.
+- **Karanlık Mod:** Baştan itibaren light/dark tema desteği.
+- **Native-hissi bileşenler:** Yuvarlatılmış köşeler, büyük dokunma alanları, minimal ama anlamlı animasyon/geçişler (ör. aşama değişiminde yumuşak transition).
+
+### Mobil UX (banka uygulaması referansı)
+- **Alt tab navigasyon** (Dashboard / Kayıtlar / Raporlar / Profil gibi).
+- **Büyük, net dokunma hedefleri** (özellikle saha teknisyeni eldiven/hızlı kullanım senaryosu düşünülerek).
+- **Net durum rozetleri ve renk kodlaması** (banka uygulamalarındaki işlem durumu göstergeleri gibi: "Beklemede", "İşlemde", "Tamamlandı", "Reddedildi").
+- **Kaydırılabilir kartlar / hızlı aksiyonlar** (swipe-to-action).
+- **Anlık geri bildirim** — işlem sonrası net onay/hata mesajları, banka uygulamalarındaki "işlem başarılı" ekranlarına benzer netlikte.
+- **Biyometrik/hızlı giriş hissi** (ileride Face ID/Touch ID benzeri WebAuthn desteği değerlendirilebilir).
+
+---
+
+## 8. Teknoloji Yığını
+
+| Katman | Teknoloji |
+|---|---|
+| Framework | **Next.js (App Router)** + TypeScript |
+| ORM | **Prisma** |
+| Veritabanı | **PostgreSQL (Neon — bulut)** |
+| UI/Styling | **Tailwind CSS** (Apple-vari tasarım sistemi component kütüphanesi ile) |
+| Kimlik Doğrulama | Auth.js (NextAuth) veya benzeri — rol bazlı yetkilendirme (RBAC) |
+| Barındırma (ara ortam) | **Vercel** |
+| Kaynak kod | **GitHub** |
+| Nihai barındırma | **Yerel sunucu + IIS** |
+
+---
+
+## 9. Geliştirme ve Yayınlama Süreci (Environment Pipeline)
+
+Proje şu akışla ilerleyecek:
+
+1. **GitHub (asıl kaynak):** Tüm kod GitHub reposunda tutulur, tüm geliştirme buradan yönetilir.
+2. **Vercel (ara/test ortamı):** GitHub'a yapılan push'lar otomatik olarak Vercel'e deploy edilir. Geliştirme ve test süreci boyunca canlı önizleme/staging ortamı olarak kullanılır.
+3. **Neon (veritabanı):** Bulut PostgreSQL veritabanı olarak Neon kullanılır. Hem Vercel ortamı hem de ileride IIS ortamı bu veritabanına bağlanır (aynı veritabanı, farklı barındırma).
+4. **IIS (nihai hedef — proje SONUNDA yapılacak):** Proje geliştirme ve test süreci tamamlandıktan sonra, kullanıcının yerel Windows sunucusuna kurulacak ve **IIS** üzerinden yayınlanacaktır.
+   - Next.js uygulamasının IIS altında çalıştırılması için seçenekler: `iisnode` ile Node process'i IIS'e bağlamak veya IIS'i **reverse proxy (ARR - Application Request Routing)** olarak kullanıp arka planda `next start` ile çalışan Node process'e yönlendirmek.
+   - Bu aşamada bir `web.config` dosyası ve IIS modül kurulumları (URL Rewrite, ARR, iisnode) gerekecek.
+   - **Bu adım, proje geliştirmesinin SON fazında ele alınacaktır** — geliştirme sürecinde bu detaylara takılınmayacak, ama kod IIS'e taşınabilir şekilde (ör. ortam değişkenleri ile yapılandırılabilir, dosya sistemi bağımlılığı olmayan) yazılacaktır.
+
+---
+
+## 10. Yol Haritası (Faz Planı)
+
+- **Faz 1 — Temel İskelet:** Next.js + Prisma + Neon bağlantısı, temel veri modeli, kimlik doğrulama, rol yapısı.
+- **Faz 2 — İş Akışı Motoru:** Aşama tanımları, aşama geçiş mantığı, StageHistory loglama.
+- **Faz 3 — Dashboard ve Raporlama:** Canlı durum panosu, zaman çizelgesi, süre metrikleri, raporlar.
+- **Faz 4 — Mobil UX Cilası:** Apple HIG + banka UX prensiplerine göre arayüz inceltme, responsive/mobil optimizasyon.
+- **Faz 5 — IIS'e Yerel Kurulum:** Yerel sunucuya kurulum, IIS yapılandırması, canlıya alma.
+
+---
+
+## 11. Açık Sorular / Netleştirilecek Noktalar
+
+Bu bölüm, ilerledikçe cevaplanacak ve güncellenecek açık maddeleri takip eder:
+
+- [ ] Gerçek aşama isimleri ve sayısı saha sürecine göre netleştirilecek (Bölüm 2'deki taslak varsayımdır).
+- [ ] Rol isimleri ve tam yetki matrisi kesinleştirilecek (Bölüm 3).
+- [ ] Bildirim ihtiyacı var mı (e-posta/SMS/push)?
+- [ ] Çoklu şube/lokasyon desteği gerekiyor mu?
+- [ ] Müşteri portalı (dış kullanıcıların kendi kaydını görebilmesi) kapsamda mı?
+- [ ] Parça/stok takibi ne kadar detaylı olacak?
+- [ ] IIS sunucusunun işletim sistemi/versiyonu ve mevcut Node.js kurulumu var mı?
+
+---
+
+## Notlar
+- Bu doküman, proje ilerledikçe güncellenecek canlı bir referanstır.
+- Geliştirme bu dosyaya göre yönlendirilecek; yeni kararlar burada ilgili bölüme eklenmelidir.

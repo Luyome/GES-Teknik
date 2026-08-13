@@ -1,0 +1,205 @@
+// GES Teknik — Prisma Şeması
+// Bkz. PROJECT.md Bölüm 5 (Veri Modeli Taslağı) ve Bölüm 2 (İş Akışı Modeli)
+// learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Kullanıcılar ve Roller
+// ---------------------------------------------------------------------------
+
+enum RoleName {
+  ADMIN // Admin / Yönetici
+  SERVICE_MANAGER // Servis Sorumlusu
+  TECHNICIAN // Teknisyen
+  QUALITY_CONTROL // Kalite Kontrol
+  CUSTOMER // Müşteri / Görüntüleyici (ileride)
+}
+
+model Role {
+  id     String   @id @default(cuid())
+  name   RoleName @unique
+  users  User[]
+  stages Stage[]
+
+  @@map("roles")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String // hash (Auth.js Credentials provider ile kullanılacak)
+  roleId    String
+  role      Role     @relation(fields: [roleId], references: [id])
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Bu kullanıcının sorumlu olduğu aşama tanımları (Stage.responsibleRole üzerinden dolaylı)
+  assignedTickets Ticket[]      @relation("AssignedTechnician")
+  stageHistories  StageHistory[]
+  attachments     Attachment[]
+
+  @@map("users")
+}
+
+// ---------------------------------------------------------------------------
+// Müşteri
+// ---------------------------------------------------------------------------
+
+model Customer {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String?
+  email     String?
+  address   String?
+  createdAt DateTime @default(now())
+
+  tickets Ticket[]
+
+  @@map("customers")
+}
+
+// ---------------------------------------------------------------------------
+// İş Akışı Aşama Tanımları (yapılandırılabilir, veri odaklı — PROJECT.md Bölüm 2)
+// ---------------------------------------------------------------------------
+
+model Stage {
+  id                String   @id @default(cuid())
+  name              String   @unique // ör. "Kayıt / Giriş", "Ön İnceleme", ...
+  order             Int      @unique // aşama sırası
+  responsibleRoleId String
+  responsibleRole   Role     @relation(fields: [responsibleRoleId], references: [id])
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+
+  ticketsAtStage Ticket[]       @relation("CurrentStage")
+  histories      StageHistory[]
+
+  @@map("stages")
+}
+
+// ---------------------------------------------------------------------------
+// Servis Kaydı (Ticket) — sisteme giren ürün/parça/varlık
+// ---------------------------------------------------------------------------
+
+enum TicketStatus {
+  OPEN // süreç devam ediyor
+  ON_HOLD // beklemede/iade edildi
+  COMPLETED // teslim/çıkış yapıldı
+  CANCELLED // iptal edildi
+}
+
+enum TicketPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+model Ticket {
+  id             String         @id @default(cuid())
+  code           String         @unique // insan-okunur takip kodu, ör. GES-2026-0001
+  customerId     String
+  customer       Customer       @relation(fields: [customerId], references: [id])
+  productInfo    String // ürün/parça/cihaz bilgisi
+  issueDescription String // giriş nedeni / arıza tanımı
+  priority       TicketPriority @default(NORMAL)
+  status         TicketStatus   @default(OPEN)
+
+  currentStageId String?
+  currentStage   Stage?  @relation("CurrentStage", fields: [currentStageId], references: [id])
+
+  assignedTechnicianId String?
+  assignedTechnician   User?   @relation("AssignedTechnician", fields: [assignedTechnicianId], references: [id])
+
+  entryDate DateTime  @default(now()) // giriş tarihi
+  exitDate  DateTime? // çıkış tarihi (teslim anında dolar)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stageHistories StageHistory[]
+  attachments    Attachment[]
+  parts          PartUsage[]
+
+  @@map("tickets")
+}
+
+// ---------------------------------------------------------------------------
+// Aşama Geçmişi / Log (audit trail — canlı izleme ve raporlamanın temeli)
+// ---------------------------------------------------------------------------
+
+enum StageOutcome {
+  IN_PROGRESS // aşama henüz kapanmadı
+  APPROVED // onay, sonraki aşamaya geçiş
+  REJECTED // red/iade, önceki aşamaya dönüş
+  CANCELLED // iptal
+}
+
+model StageHistory {
+  id        String       @id @default(cuid())
+  ticketId  String
+  ticket    Ticket       @relation(fields: [ticketId], references: [id])
+  stageId   String
+  stage     Stage        @relation(fields: [stageId], references: [id])
+  userId    String
+  user      User         @relation(fields: [userId], references: [id])
+  enteredAt DateTime     @default(now())
+  exitedAt  DateTime?
+  outcome   StageOutcome @default(IN_PROGRESS)
+  note      String?
+
+  @@map("stage_histories")
+}
+
+// ---------------------------------------------------------------------------
+// Ekler / Notlar
+// ---------------------------------------------------------------------------
+
+model Attachment {
+  id        String   @id @default(cuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  fileUrl   String?
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@map("attachments")
+}
+
+// ---------------------------------------------------------------------------
+// Parça / Stok Kullanımı (opsiyonel, ilerleyen fazda detaylandırılacak)
+// ---------------------------------------------------------------------------
+
+model Part {
+  id        String      @id @default(cuid())
+  name      String
+  sku       String?     @unique
+  stockQty  Int         @default(0)
+  createdAt DateTime    @default(now())
+  usages    PartUsage[]
+
+  @@map("parts")
+}
+
+model PartUsage {
+  id       String @id @default(cuid())
+  ticketId String
+  ticket   Ticket @relation(fields: [ticketId], references: [id])
+  partId   String
+  part     Part   @relation(fields: [partId], references: [id])
+  quantity Int    @default(1)
+
+  @@map("part_usages")
+}

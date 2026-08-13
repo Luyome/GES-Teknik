@@ -1,0 +1,100 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+ * GES Teknik — Tasarım Token'ları
+ * Apple Human Interface Guidelines'a referanslı sistem renkleri, tipografi
+ * ve yüzey (surface) katmanları. Bkz. PROJECT.md Bölüm 7 (Tasarım Dili).
+ * ------------------------------------------------------------------------- */
+
+:root {
+  /* Sistem renkleri (Apple HIG - light) */
+  --color-system-blue: #007aff;
+  --color-system-green: #34c759;
+  --color-system-red: #ff3b30;
+  --color-system-orange: #ff9500;
+  --color-system-yellow: #ffcc00;
+  --color-system-gray: #8e8e93;
+
+  /* Yüzeyler (light) */
+  --color-canvas: #f2f2f7; /* systemGroupedBackground */
+  --color-surface: #ffffff; /* secondarySystemGroupedBackground / kart */
+  --color-surface-2: #f2f2f7;
+  --color-border: rgba(60, 60, 67, 0.15);
+
+  /* Metin (light) */
+  --color-label: #1c1c1e;
+  --color-label-secondary: rgba(60, 60, 67, 0.6);
+  --color-label-tertiary: rgba(60, 60, 67, 0.3);
+
+  /* Durum renkleri (StageOutcome / TicketStatus rozetleri için) */
+  --color-status-open: var(--color-system-blue);
+  --color-status-onhold: var(--color-system-orange);
+  --color-status-completed: var(--color-system-green);
+  --color-status-cancelled: var(--color-system-red);
+
+  --radius-card: 16px;
+  --radius-control: 10px;
+  --radius-pill: 999px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-system-blue: #0a84ff;
+    --color-system-green: #30d158;
+    --color-system-red: #ff453a;
+    --color-system-orange: #ff9f0a;
+    --color-system-yellow: #ffd60a;
+    --color-system-gray: #8e8e93;
+
+    --color-canvas: #000000;
+    --color-surface: #1c1c1e;
+    --color-surface-2: #2c2c2e;
+    --color-border: rgba(84, 84, 88, 0.6);
+
+    --color-label: #ffffff;
+    --color-label-secondary: rgba(235, 235, 245, 0.6);
+    --color-label-tertiary: rgba(235, 235, 245, 0.3);
+  }
+}
+
+@theme inline {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+    Inter, Roboto, Helvetica, Arial, sans-serif;
+
+  --color-canvas: var(--color-canvas);
+  --color-surface: var(--color-surface);
+  --color-surface-2: var(--color-surface-2);
+  --color-border: var(--color-border);
+
+  --color-label: var(--color-label);
+  --color-label-secondary: var(--color-label-secondary);
+  --color-label-tertiary: var(--color-label-tertiary);
+
+  --color-blue: var(--color-system-blue);
+  --color-green: var(--color-system-green);
+  --color-red: var(--color-system-red);
+  --color-orange: var(--color-system-orange);
+  --color-yellow: var(--color-system-yellow);
+  --color-gray: var(--color-system-gray);
+
+  --color-status-open: var(--color-status-open);
+  --color-status-onhold: var(--color-status-onhold);
+  --color-status-completed: var(--color-status-completed);
+  --color-status-cancelled: var(--color-status-cancelled);
+
+  --radius-card: var(--radius-card);
+  --radius-control: var(--radius-control);
+  --radius-pill: var(--radius-pill);
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-label);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* iOS'taki gibi dokunma vurgusunu kaldırıp kendi geri bildirimimizi kullanıyoruz */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
