@@ -14,6 +14,16 @@ export default auth((req) => {
   const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
   const isLoggedIn = !!req.auth;
 
+  // Server Action / form POST istekleri burada kontrol edilmiyor: Edge'de
+  // çalışan bu proxy, POST isteklerinde (Next.js Server Actions) req.auth'u
+  // güvenilir biçimde okuyamıyor (Next.js 16 + Auth.js v5 beta ile
+  // gözlemlenen bir uyumsuzluk). Yetkilendirme, ilgili server action içinde
+  // Node runtime'da çalışan `auth()` çağrısıyla zaten ayrıca yapılıyor.
+  // Proxy sadece sayfa GET isteklerinde login'e yönlendirme uygular.
+  if (req.method !== "GET") {
+    return NextResponse.next();
+  }
+
   if (!isLoggedIn && !isPublic) {
     const loginUrl = new URL("/login", req.nextUrl.origin);
     loginUrl.searchParams.set("callbackUrl", pathname);
