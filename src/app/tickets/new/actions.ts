@@ -12,6 +12,7 @@ export async function createTicketAction(
   formData: FormData
 ): Promise<CreateTicketState> {
   const session = await auth();
+  console.log("[createTicketAction] session:", session?.user?.id, session?.user?.email);
   if (!session?.user?.id) {
     return { error: "Oturum bulunamadı, lütfen tekrar giriş yapın." };
   }
@@ -26,45 +27,52 @@ export async function createTicketAction(
     return { error: "Müşteri adı, ürün bilgisi ve arıza tanımı zorunludur." };
   }
 
-  const firstStage = await prisma.stage.findFirst({ orderBy: { order: "asc" } });
-  if (!firstStage) {
-    return { error: "Tanımlı bir iş akışı aşaması bulunamadı. Önce Ayarlar'dan aşama tanımlayın." };
-  }
+  let ticketId: string;
+  try {
+    const firstStage = await prisma.stage.findFirst({ orderBy: { order: "asc" } });
+    if (!firstStage) {
+      return { error: "Tanımlı bir iş akışı aşaması bulunamadı. Önce Ayarlar'dan aşama tanımlayın." };
+    }
 
-  // Aynı isimli müşteri varsa onu kullan, yoksa yeni oluştur (basit eşleştirme).
-  let customer = await prisma.customer.findFirst({
-    where: { name: { equals: customerName, mode: "insensitive" } },
-  });
-  if (!customer) {
-    customer = await prisma.customer.create({
-      data: { name: customerName, phone: customerPhone || null },
+    // Aynı isimli müşteri varsa onu kullan, yoksa yeni oluştur (basit eşleştirme).
+    let customer = await prisma.customer.findFirst({
+      where: { name: { equals: customerName, mode: "insensitive" } },
     });
-  }
+    if (!customer) {
+      customer = await prisma.customer.create({
+        data: { name: customerName, phone: customerPhone || null },
+      });
+    }
 
-  const year = new Date().getFullYear();
-  const ticketCountThisYear = await prisma.ticket.count({
-    where: { entryDate: { gte: new Date(`${year}-01-01`) } },
-  });
-  const code = `GES-${year}-${String(ticketCountThisYear + 1).padStart(4, "0")}`;
+    const year = new Date().getFullYear();
+    const ticketCountThisYear = await prisma.ticket.count({
+      where: { entryDate: { gte: new Date(`${year}-01-01`) } },
+    });
+    const code = `GES-${year}-${String(ticketCountThisYear + 1).padStart(4, "0")}`;
 
-  const ticket = await prisma.ticket.create({
-    data: {
-      code,
-      customerId: customer.id,
-      productInfo,
-      issueDescription,
-      priority,
-      status: "OPEN",
-      currentStageId: firstStage.id,
-      stageHistories: {
-        create: {
-          stageId: firstStage.id,
-          userId: session.user.id,
-          outcome: "IN_PROGRESS",
+    const ticket = await prisma.ticket.create({
+      data: {
+        code,
+        customerId: customer.id,
+        productInfo,
+        issueDescription,
+        priority,
+        status: "OPEN",
+        currentStageId: firstStage.id,
+        stageHistories: {
+          create: {
+            stageId: firstStage.id,
+            userId: session.user.id,
+            outcome: "IN_PROGRESS",
+          },
         },
       },
-    },
-  });
+    });
+    ticketId = ticket.id;
+  } catch (err) {
+    console.error("[createTicketAction] error:", err);
+    return { error: `Kayıt oluşturulamadı: ${err instanceof Error ? err.message : String(err)}` };
+  }
 
-  redirect(`/tickets/${ticket.id}`);
+  redirect(`/tickets/${ticketId}`);
 }

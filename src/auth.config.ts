@@ -7,6 +7,7 @@ import type { NextAuthConfig } from "next-auth";
 // sadece JWT session'ı okuyabilmek için gereklidir.
 export const authConfig = {
   session: { strategy: "jwt" },
+  trustHost: true,
   pages: {
     signIn: "/login",
   },
