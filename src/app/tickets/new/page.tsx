@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { NewTicketForm } from "./NewTicketForm";
 
+// Statik prerender edilirse, sayfadaki server action referansı build anındaki
+// deployment'a kilitlenir; yeni bir deploy sonrası tarayıcı önbelleğinde eski
+// bir kopya kalırsa form gönderimi tutarsız davranabilir. Bu yüzden dinamik.
+export const dynamic = "force-dynamic";
+
 export default function NewTicketPage() {
   return (
     <div className="space-y-6">

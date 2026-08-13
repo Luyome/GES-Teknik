@@ -13,10 +13,7 @@ export async function createTicketAction(
 ): Promise<CreateTicketState> {
   const session = await auth();
   if (!session?.user?.id) {
-    // GEÇİCİ TEŞHİS: session'ın tam olarak ne döndüğünü hata mesajında göster.
-    return {
-      error: `[DEBUG] session=${JSON.stringify(session)} user=${JSON.stringify(session?.user)}`,
-    };
+    return { error: "Oturum bulunamadı, lütfen tekrar giriş yapın." };
   }
 
   const customerName = (formData.get("customerName") as string | null)?.trim();
