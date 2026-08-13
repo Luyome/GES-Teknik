@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { unstable_noStore as noStore, revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import type { TicketPriority } from "@/generated/prisma/enums";
@@ -11,6 +12,13 @@ export async function createTicketAction(
   _prevState: CreateTicketState | undefined,
   formData: FormData
 ): Promise<CreateTicketState> {
+  // Bu route (/tickets/new) daha önce statik/ISR olarak prerender edildiği
+  // için Vercel'in route cache'i bu action'ın çağrıldığı istekleri de
+  // önbellekten (stale, oturumsuz bir kopyadan) karşılamaya devam
+  // edebiliyordu. noStore() bu action'ı her koşulda önbellek dışı bırakır.
+  noStore();
+  revalidatePath("/tickets/new");
+
   const session = await auth();
   if (!session?.user?.id) {
     return { error: "Oturum bulunamadı, lütfen tekrar giriş yapın." };
