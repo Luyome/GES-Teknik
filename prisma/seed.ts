@@ -70,6 +70,32 @@ async function main() {
     console.log(`İlk admin kullanıcısı oluşturuldu: ${adminEmail}`);
   }
 
+  // Onaylı akış sistemini farklı personel rolleriyle test edebilmek için,
+  // aşamaların sorumlu olduğu her role (ADMIN hariç) birer örnek kullanıcı
+  // upsert edilir — idempotent, tekrar çalıştırmak güvenli.
+  const DEMO_USERS: { role: (typeof ROLES)[number]; name: string; email: string }[] = [
+    { role: "SERVICE_MANAGER", name: "Servis Sorumlusu", email: "servis@gesteknik.com" },
+    { role: "TECHNICIAN", name: "Teknisyen", email: "teknisyen@gesteknik.com" },
+    { role: "QUALITY_CONTROL", name: "Kalite Kontrol", email: "kalitekontrol@gesteknik.com" },
+  ];
+  const demoPassword = process.env.SEED_DEMO_PASSWORD ?? "GesTeknik2026!";
+  const demoHashed = await bcrypt.hash(demoPassword, 10);
+  for (const demo of DEMO_USERS) {
+    await prisma.user.upsert({
+      where: { email: demo.email },
+      update: {},
+      create: {
+        name: demo.name,
+        email: demo.email,
+        password: demoHashed,
+        roleId: roleRecords.get(demo.role)!,
+      },
+    });
+  }
+  console.log(
+    `Örnek kullanıcılar hazır (şifre: ${demoPassword}): ${DEMO_USERS.map((d) => d.email).join(", ")}`
+  );
+
   console.log("Seed tamamlandı: roller ve aşamalar oluşturuldu.");
 }
 

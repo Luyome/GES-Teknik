@@ -74,14 +74,15 @@ export async function getStageDurationStats() {
 
 export async function getReportSummary(filters: ReportFilters) {
   const where = buildTicketWhere(filters);
-  const [total, open, onHold, completed, cancelled] = await Promise.all([
+  const [total, assigned, open, onHold, completed, cancelled] = await Promise.all([
     prisma.ticket.count({ where }),
+    prisma.ticket.count({ where: { ...where, status: "ASSIGNED" } }),
     prisma.ticket.count({ where: { ...where, status: "OPEN" } }),
     prisma.ticket.count({ where: { ...where, status: "ON_HOLD" } }),
     prisma.ticket.count({ where: { ...where, status: "COMPLETED" } }),
     prisma.ticket.count({ where: { ...where, status: "CANCELLED" } }),
   ]);
-  return { total, open, onHold, completed, cancelled };
+  return { total, assigned, open, onHold, completed, cancelled };
 }
 
 export function formatDuration(ms: number): string {

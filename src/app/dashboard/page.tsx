@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 // Canlı durum panosu — PROJECT.md Bölüm 4: her kaydın hangi aşamada
 // olduğunun anlık görünümü (kanban tarzı aşama sütunları).
 export default async function DashboardPage() {
-  const { tickets, stageColumns, openCount, onHoldCount, completedCount } =
+  const { tickets, stageColumns, assignedCount, openCount, onHoldCount, completedCount } =
     await getDashboardData();
 
   return (
@@ -23,9 +23,10 @@ export default async function DashboardPage() {
       </header>
 
       {/* Özet metrik kartları */}
-      <div className="grid grid-cols-3 gap-3">
-        <StatTile label="İşlemde" value={openCount} colorVar="var(--color-status-open)" />
-        <StatTile label="Beklemede" value={onHoldCount} colorVar="var(--color-status-onhold)" />
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <StatTile label="Atandı" value={assignedCount} colorVar="var(--color-system-gray)" />
+        <StatTile label="Çalışıyor" value={openCount} colorVar="var(--color-status-open)" />
+        <StatTile label="Müşteri Onayı Bekliyor" value={onHoldCount} colorVar="var(--color-status-onhold)" />
         <StatTile label="Tamamlanan" value={completedCount} colorVar="var(--color-status-completed)" />
       </div>
 

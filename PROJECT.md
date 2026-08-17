@@ -52,10 +52,25 @@ Faz 5 — IIS'e Yerel Kurulum (hazırlık tamamlandı, fiili kurulum bekliyor):
 - [x] `deploy/web.config` (ARR reverse-proxy config), `deploy/setup-iis.ps1` (IIS/ARR kurulum + servis kaydı scripti), `deploy/README.md` (adım adım talimat) repoya eklendi.
 - [ ] **Fiili IIS kurulumu kullanıcı tarafından yapılmalı** — bu geliştirme makinesinde IIS kurulu değil (`W3SVC` servisi yok, `C:\inetpub\wwwroot` yok) ve kurulumu Yönetici yetkisi gerektiriyor; Claude'un çalıştığı shell admin değil. Bkz. `deploy/README.md`.
 
+Ayrıca tamamlananlar (Onaylı Akış Sistemi — Faz 2'nin genişletilmesi, 2026-08-17):
+- [x] **Durum makinesi genişletildi** — `TicketStatus`'a `ASSIGNED` ("Atandı") eklendi, `ON_HOLD`'un anlamı "Müşteri Onayı Bekliyor"ya çevrildi. Yeni kayıt artık doğrudan "Çalışıyor" değil, "Atandı" ile başlıyor; sorumlu personel **"Kabul Et"** demeden (`/api/tickets/[id]/accept`) işlem yapamıyor.
+- [x] **"Parça Eksik / Müşteri Onayı Gerekli"** akışı — `/api/tickets/[id]/parts-issue` ile kayıt aynı aşamada "Müşteri Onayı Bekliyor"a alınır; müşteriden onay alındıktan sonra (sistem dışında) personel/admin `/api/tickets/[id]/customer-approved` ile kaydı aynı aşamada "Çalışıyor"a döndürür.
+- [x] **Zorunlu not girişi** — Kabul/Onay/Red/İptal/Parça Eksik/Müşteri Onayı adımlarının **hepsinde** not girmek zorunlu (hem client hem server 400 döner) — tam audit trail.
+- [x] **`TicketNote` audit log tablosu** (`prisma/schema.prisma`) — `StageHistory`'nin (aşama süre ölçümü) yanında, her zorunlu adımı notuyla kaydeden append-only tablo; ticket detay sayfasındaki zaman çizelgesinin (`src/app/tickets/[id]/page.tsx`) tek kaynağı.
+- [x] **Yeni Kayıt formu genişletildi** (`src/app/tickets/create/NewTicketForm.tsx`) — müşteri e-posta/adres, seri no, garanti kapsamında mı, tahmini teslim tarihi eklendi.
+- [x] **Fotoğraf/dosya eki yükleme** — `/api/tickets/[id]/attachments`, Vercel Blob (`@vercel/blob`) kullanır. **ÖN KOŞUL:** Vercel projesinde bir Blob Store bağlanmalı (Vercel Dashboard → Storage → Create → Blob → Connect to Project) — bu benim yapamayacağım, kullanıcının Vercel hesabında tek seferlik yapması gereken bir adım. Bağlanmadan önce yükleme denemesi net bir hata mesajıyla başarısız olur, uygulamanın geri kalanını etkilemez.
+- [x] **Örnek personel hesapları** (`prisma/seed.ts`, idempotent) — farklı rollerin akışı gerçekten test edebilmesi için:
+  - Servis Sorumlusu: `servis@gesteknik.com` / `GesTeknik2026!`
+  - Teknisyen: `teknisyen@gesteknik.com` / `GesTeknik2026!`
+  - Kalite Kontrol: `kalitekontrol@gesteknik.com` / `GesTeknik2026!`
+  - **Bu şifreler de ilk fırsatta `/settings/profile`'dan değiştirilmeli.**
+- [x] Uçtan uca doğrulandı: kayıt oluşturma → Kabul Et → Parça Eksik → Müşteri Onayladı → Onayla (sonraki aşamaya "Atandı" olarak geçiş) → farklı rolün (Teknisyen) yetkisiz erişimde 403 alması → doğru rolün (Servis Sorumlusu) kabul edebilmesi.
+- [ ] **Önemli mimari not:** dev ve production **aynı Neon veritabanını** paylaşıyor (bkz. Bölüm 9). Bu değişiklikteki migration (`20260817114244_onayli_akis_sistemi`) tamamen additive (yeni enum değeri, yeni nullable kolonlar, yeni tablo) — mevcut veriyi bozmadı, ama gelecekteki şema değişikliklerinde de bu kurala uyulmalı.
+
 Yapılacaklar:
 - [ ] Faz 5'in fiili IIS kurulumu (kullanıcı, admin PowerShell ile `deploy/setup-iis.ps1` çalıştıracak).
+- [ ] Vercel'de bir Blob Store bağlanması (kullanıcı, tek seferlik) — bağlanmadan fotoğraf/dosya eki yükleme çalışmaz.
 - [ ] PDF export (şu an sadece CSV var — talep gelirse eklenecek).
-- [ ] Attachment (fotoğraf/dosya) yükleme UI'ı — şema hazır (`Attachment` modeli), UI bağlanmadı.
 - [ ] Part/PartUsage (parça-stok) UI'ı — şema hazır, kapsam dışı bırakıldı (PROJECT.md Bölüm 11'de açık soru).
 
 ### Kurulum sırasında öğrenilen önemli teknik notlar

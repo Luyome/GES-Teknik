@@ -56,29 +56,68 @@ export function NewTicketForm() {
         />
       </div>
 
-      <div className="space-y-1.5">
-        <label htmlFor="customerPhone" className="text-[13px] text-label-secondary">
-          Telefon (opsiyonel)
-        </label>
-        <input
-          id="customerPhone"
-          name="customerPhone"
-          className={fieldClass}
-          placeholder="05xx xxx xx xx"
-        />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <label htmlFor="customerPhone" className="text-[13px] text-label-secondary">
+            Telefon (opsiyonel)
+          </label>
+          <input
+            id="customerPhone"
+            name="customerPhone"
+            className={fieldClass}
+            placeholder="05xx xxx xx xx"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label htmlFor="customerEmail" className="text-[13px] text-label-secondary">
+            E-posta (opsiyonel)
+          </label>
+          <input
+            id="customerEmail"
+            name="customerEmail"
+            type="email"
+            className={fieldClass}
+            placeholder="ornek@eposta.com"
+          />
+        </div>
       </div>
 
       <div className="space-y-1.5">
-        <label htmlFor="productInfo" className="text-[13px] text-label-secondary">
-          Ürün / Parça Bilgisi
+        <label htmlFor="customerAddress" className="text-[13px] text-label-secondary">
+          Adres (opsiyonel)
         </label>
         <input
-          id="productInfo"
-          name="productInfo"
-          required
+          id="customerAddress"
+          name="customerAddress"
           className={fieldClass}
-          placeholder="ör. İnvertör — Growatt 5kW"
+          placeholder="Mahalle, sokak, no, ilçe/il"
         />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <label htmlFor="productInfo" className="text-[13px] text-label-secondary">
+            Ürün / Parça Bilgisi
+          </label>
+          <input
+            id="productInfo"
+            name="productInfo"
+            required
+            className={fieldClass}
+            placeholder="ör. İnvertör — Growatt 5kW"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label htmlFor="serialNumber" className="text-[13px] text-label-secondary">
+            Seri No (opsiyonel)
+          </label>
+          <input
+            id="serialNumber"
+            name="serialNumber"
+            className={fieldClass}
+            placeholder="ör. SN-2024-00123"
+          />
+        </div>
       </div>
 
       <div className="space-y-1.5">
@@ -95,17 +134,40 @@ export function NewTicketForm() {
         />
       </div>
 
-      <div className="space-y-1.5">
-        <label htmlFor="priority" className="text-[13px] text-label-secondary">
-          Öncelik
-        </label>
-        <select id="priority" name="priority" defaultValue="NORMAL" className={fieldClass}>
-          {PRIORITY_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="space-y-1.5">
+          <label htmlFor="priority" className="text-[13px] text-label-secondary">
+            Öncelik
+          </label>
+          <select id="priority" name="priority" defaultValue="NORMAL" className={fieldClass}>
+            {PRIORITY_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1.5">
+          <label htmlFor="isUnderWarranty" className="text-[13px] text-label-secondary">
+            Garanti Kapsamında mı?
+          </label>
+          <select id="isUnderWarranty" name="isUnderWarranty" defaultValue="" className={fieldClass}>
+            <option value="">Belirtilmedi</option>
+            <option value="true">Evet, garanti kapsamında</option>
+            <option value="false">Hayır, garanti dışı</option>
+          </select>
+        </div>
+        <div className="space-y-1.5">
+          <label htmlFor="estimatedDeliveryDate" className="text-[13px] text-label-secondary">
+            Tahmini Teslim Tarihi (opsiyonel)
+          </label>
+          <input
+            id="estimatedDeliveryDate"
+            name="estimatedDeliveryDate"
+            type="date"
+            className={fieldClass}
+          />
+        </div>
       </div>
 
       {error && <p className="text-[13px] text-red">{error}</p>}

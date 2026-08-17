@@ -28,6 +28,17 @@ export function getTicketById(id: string) {
         include: { stage: true, user: true },
         orderBy: { enteredAt: "asc" },
       },
+      // Ticket detay sayfasındaki zaman çizelgesinin tek kaynağı — her
+      // zorunlu adımın (Atandı/Kabul/Parça Eksik/Müşteri Onayı/Onay/Red/
+      // İptal) notuyla birlikte kronolojik kaydı.
+      notes: {
+        include: { stage: true, user: true },
+        orderBy: { createdAt: "asc" },
+      },
+      attachments: {
+        include: { user: true },
+        orderBy: { createdAt: "desc" },
+      },
     },
   });
 }
@@ -35,6 +46,7 @@ export function getTicketById(id: string) {
 export async function getDashboardData() {
   const [stages, tickets] = await Promise.all([getAllStages(), getAllTickets()]);
 
+  const assignedCount = tickets.filter((t) => t.status === "ASSIGNED").length;
   const openCount = tickets.filter((t) => t.status === "OPEN").length;
   const onHoldCount = tickets.filter((t) => t.status === "ON_HOLD").length;
   const completedCount = tickets.filter((t) => t.status === "COMPLETED").length;
@@ -46,5 +58,5 @@ export async function getDashboardData() {
     ),
   }));
 
-  return { tickets, stageColumns, openCount, onHoldCount, completedCount };
+  return { tickets, stageColumns, assignedCount, openCount, onHoldCount, completedCount };
 }

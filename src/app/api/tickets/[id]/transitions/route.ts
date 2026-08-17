@@ -3,13 +3,16 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import type { StageOutcome } from "@/generated/prisma/enums";
 
-// Aşama geçiş endpoint'i — PROJECT.md Bölüm 2 (Aşama kuralları).
-// Bilinçli olarak bir Route Handler, Server Action değil: bkz.
-// src/app/api/tickets/route.ts üstündeki not (auth() güvenilirliği).
+// Aşama geçiş endpoint'i — PROJECT.md Bölüm 2 (Aşama kuralları) ve onaylı
+// akış sistemi güncellemesi. Bilinçli olarak bir Route Handler, Server
+// Action değil: bkz. src/app/api/tickets/route.ts üstündeki not.
 //
 // Bir aşama şu sonuçlardan biriyle kapanır: Onay (sonraki aşamaya geçiş),
-// Red/İade (önceki aşamaya geri dönüş), İptal. Her geçişte zaman damgası,
-// kullanıcı ve not otomatik loglanır (StageHistory).
+// Red/İade (önceki aşamaya geri dönüş), İptal. Bu endpoint yalnızca kayıt
+// "Çalışıyor" (OPEN) durumundayken çağrılabilir — yani sorumlu kişi önce
+// "Kabul Et" (/api/tickets/[id]/accept) demiş olmalı. Her geçişte zaman
+// damgası, kullanıcı ve not otomatik loglanır (StageHistory + TicketNote).
+// Not artık TÜM sonuçlarda zorunludur (tam audit trail).
 const VALID_OUTCOMES: StageOutcome[] = ["APPROVED", "REJECTED", "CANCELLED"];
 
 export async function POST(
@@ -24,10 +27,13 @@ export async function POST(
   const { id: ticketId } = await params;
   const body = await request.json().catch(() => null);
   const outcome = body?.outcome as StageOutcome | undefined;
-  const note = (body?.note as string | undefined)?.trim() || null;
+  const note = (body?.note as string | undefined)?.trim();
 
   if (!outcome || !VALID_OUTCOMES.includes(outcome)) {
     return NextResponse.json({ error: "Geçersiz işlem sonucu." }, { status: 400 });
+  }
+  if (!note) {
+    return NextResponse.json({ error: "Not girmek zorunludur." }, { status: 400 });
   }
 
   try {
@@ -42,6 +48,12 @@ export async function POST(
       }
       if (ticket.status === "COMPLETED" || ticket.status === "CANCELLED") {
         return { error: "Bu kayıt zaten sonuçlandırılmış.", status: 400 } as const;
+      }
+      if (ticket.status === "ASSIGNED") {
+        return { error: "Önce kaydı 'Kabul Et' ile üstlenmelisiniz.", status: 400 } as const;
+      }
+      if (ticket.status === "ON_HOLD") {
+        return { error: "Kayıt müşteri onayı bekliyor, önce 'Müşteri Onayladı' ile devam ettirin.", status: 400 } as const;
       }
       if (!ticket.currentStage || !ticket.currentStageId) {
         return { error: "Kaydın mevcut bir aşaması yok.", status: 400 } as const;
@@ -87,10 +99,17 @@ export async function POST(
           where: { id: ticketId },
           data: { status: "CANCELLED" },
         });
+        await tx.ticketNote.create({
+          data: { ticketId, stageId: ticket.currentStageId, userId: session.user.id!, type: "CANCELLED", note },
+        });
         return { ticket: updated } as const;
       }
 
       if (outcome === "APPROVED") {
+        await tx.ticketNote.create({
+          data: { ticketId, stageId: ticket.currentStageId, userId: session.user.id!, type: "APPROVED", note },
+        });
+
         const nextStage = await tx.stage.findFirst({
           where: { isActive: true, order: { gt: ticket.currentStage.order } },
           orderBy: { order: "asc" },
@@ -107,7 +126,7 @@ export async function POST(
 
         const updated = await tx.ticket.update({
           where: { id: ticketId },
-          data: { status: "OPEN", currentStageId: nextStage.id },
+          data: { status: "ASSIGNED", currentStageId: nextStage.id },
         });
         await tx.stageHistory.create({
           data: {
@@ -117,10 +136,23 @@ export async function POST(
             outcome: "IN_PROGRESS",
           },
         });
+        await tx.ticketNote.create({
+          data: {
+            ticketId,
+            stageId: nextStage.id,
+            userId: session.user.id!,
+            type: "ASSIGNED",
+            note: `"${nextStage.name}" aşamasına atandı.`,
+          },
+        });
         return { ticket: updated } as const;
       }
 
-      // REJECTED — bir önceki aktif aşamaya dön (yoksa aynı aşamada kal), kaydı beklemeye al.
+      // REJECTED — bir önceki aktif aşamaya dön (yoksa aynı aşamada kal), yeniden kabul beklensin.
+      await tx.ticketNote.create({
+        data: { ticketId, stageId: ticket.currentStageId, userId: session.user.id!, type: "REJECTED", note },
+      });
+
       const prevStage = await tx.stage.findFirst({
         where: { isActive: true, order: { lt: ticket.currentStage.order } },
         orderBy: { order: "desc" },
@@ -129,7 +161,7 @@ export async function POST(
 
       const updated = await tx.ticket.update({
         where: { id: ticketId },
-        data: { status: "ON_HOLD", currentStageId: targetStage.id },
+        data: { status: "ASSIGNED", currentStageId: targetStage.id },
       });
       await tx.stageHistory.create({
         data: {
@@ -137,6 +169,15 @@ export async function POST(
           stageId: targetStage.id,
           userId: session.user.id!,
           outcome: "IN_PROGRESS",
+        },
+      });
+      await tx.ticketNote.create({
+        data: {
+          ticketId,
+          stageId: targetStage.id,
+          userId: session.user.id!,
+          type: "ASSIGNED",
+          note: `İade edildi, "${targetStage.name}" aşamasına yeniden atandı.`,
         },
       });
       return { ticket: updated } as const;

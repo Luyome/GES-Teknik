@@ -2,14 +2,15 @@
 // dayalı, tutarlı durum rozeti. Banka uygulamalarındaki işlem durumu
 // göstergelerine benzer netlikte tasarlandı (PROJECT.md Bölüm 7).
 
-export type TicketStatus = "OPEN" | "ON_HOLD" | "COMPLETED" | "CANCELLED";
+export type TicketStatus = "ASSIGNED" | "OPEN" | "ON_HOLD" | "COMPLETED" | "CANCELLED";
 
 const STATUS_CONFIG: Record<
   TicketStatus,
   { label: string; colorVar: string }
 > = {
-  OPEN: { label: "İşlemde", colorVar: "var(--color-status-open)" },
-  ON_HOLD: { label: "Beklemede", colorVar: "var(--color-status-onhold)" },
+  ASSIGNED: { label: "Atandı", colorVar: "var(--color-system-gray)" },
+  OPEN: { label: "Çalışıyor", colorVar: "var(--color-status-open)" },
+  ON_HOLD: { label: "Müşteri Onayı Bekliyor", colorVar: "var(--color-status-onhold)" },
   COMPLETED: { label: "Tamamlandı", colorVar: "var(--color-status-completed)" },
   CANCELLED: { label: "İptal", colorVar: "var(--color-status-cancelled)" },
 };

@@ -14,8 +14,9 @@ import { ReportFilterForm } from "./ReportFilterForm";
 export const dynamic = "force-dynamic";
 
 const STATUS_OPTIONS: { value: TicketStatus; label: string }[] = [
-  { value: "OPEN", label: "İşlemde" },
-  { value: "ON_HOLD", label: "Beklemede" },
+  { value: "ASSIGNED", label: "Atandı" },
+  { value: "OPEN", label: "Çalışıyor" },
+  { value: "ON_HOLD", label: "Müşteri Onayı Bekliyor" },
   { value: "COMPLETED", label: "Tamamlandı" },
   { value: "CANCELLED", label: "İptal" },
 ];
@@ -64,10 +65,11 @@ export default async function ReportsPage({
       <ReportFilterForm stages={stages} statusOptions={STATUS_OPTIONS} filters={filters} />
 
       {/* Özet kartlar */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
         <SummaryTile label="Toplam" value={summary.total} />
-        <SummaryTile label="İşlemde" value={summary.open} colorVar="var(--color-status-open)" />
-        <SummaryTile label="Beklemede" value={summary.onHold} colorVar="var(--color-status-onhold)" />
+        <SummaryTile label="Atandı" value={summary.assigned} colorVar="var(--color-system-gray)" />
+        <SummaryTile label="Çalışıyor" value={summary.open} colorVar="var(--color-status-open)" />
+        <SummaryTile label="Müşteri Onayı Bekliyor" value={summary.onHold} colorVar="var(--color-status-onhold)" />
         <SummaryTile label="Tamamlanan" value={summary.completed} colorVar="var(--color-status-completed)" />
         <SummaryTile label="İptal" value={summary.cancelled} colorVar="var(--color-status-cancelled)" />
       </div>

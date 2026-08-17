@@ -44,8 +44,9 @@ model User {
   updatedAt DateTime @updatedAt
 
   // Bu kullanıcının sorumlu olduğu aşama tanımları (Stage.responsibleRole üzerinden dolaylı)
-  assignedTickets Ticket[]      @relation("AssignedTechnician")
+  assignedTickets Ticket[]       @relation("AssignedTechnician")
   stageHistories  StageHistory[]
+  ticketNotes     TicketNote[]
   attachments     Attachment[]
 
   @@map("users")
@@ -83,6 +84,7 @@ model Stage {
 
   ticketsAtStage Ticket[]       @relation("CurrentStage")
   histories      StageHistory[]
+  ticketNotes    TicketNote[]
 
   @@map("stages")
 }
@@ -92,8 +94,9 @@ model Stage {
 // ---------------------------------------------------------------------------
 
 enum TicketStatus {
-  OPEN // süreç devam ediyor
-  ON_HOLD // beklemede/iade edildi
+  ASSIGNED // aşamaya atandı, sorumlu kişinin "Kabul Et" demesi bekleniyor
+  OPEN // kabul edildi, süreç fiilen çalışıyor
+  ON_HOLD // müşteri onayı bekleniyor (ör. parça eksik/değişimi)
   COMPLETED // teslim/çıkış yapıldı
   CANCELLED // iptal edildi
 }
@@ -106,14 +109,17 @@ enum TicketPriority {
 }
 
 model Ticket {
-  id             String         @id @default(cuid())
-  code           String         @unique // insan-okunur takip kodu, ör. GES-2026-0001
-  customerId     String
-  customer       Customer       @relation(fields: [customerId], references: [id])
-  productInfo    String // ürün/parça/cihaz bilgisi
-  issueDescription String // giriş nedeni / arıza tanımı
-  priority       TicketPriority @default(NORMAL)
-  status         TicketStatus   @default(OPEN)
+  id                    String         @id @default(cuid())
+  code                  String         @unique // insan-okunur takip kodu, ör. GES-2026-0001
+  customerId            String
+  customer              Customer       @relation(fields: [customerId], references: [id])
+  productInfo           String // ürün/parça/cihaz bilgisi
+  serialNumber          String? // seri no / cihaz kimliği
+  isUnderWarranty       Boolean? // garanti kapsamında mı (bilinmiyorsa null)
+  estimatedDeliveryDate DateTime? // tahmini teslim tarihi (SLA)
+  issueDescription      String // giriş nedeni / arıza tanımı
+  priority              TicketPriority @default(NORMAL)
+  status                TicketStatus   @default(ASSIGNED)
 
   currentStageId String?
   currentStage   Stage?  @relation("CurrentStage", fields: [currentStageId], references: [id])
@@ -128,6 +134,7 @@ model Ticket {
   updatedAt DateTime @updatedAt
 
   stageHistories StageHistory[]
+  notes          TicketNote[]
   attachments    Attachment[]
   parts          PartUsage[]
 
@@ -159,6 +166,39 @@ model StageHistory {
   note      String?
 
   @@map("stage_histories")
+}
+
+// ---------------------------------------------------------------------------
+// Ticket Aktivite Günlüğü — her zorunlu adımın (Atandı/Kabul/Parça Eksik/
+// Müşteri Onayı/Onay/Red/İptal) notuyla birlikte kaydedildiği, append-only
+// audit log. StageHistory'nin (aşama bazlı süre ölçümü) YERİNE değil,
+// YANINDA durur — ticket detay sayfasındaki zaman çizelgesinin tek kaynağı
+// budur (bkz. PROJECT.md Bölüm 4 ve son güncelleme notu).
+// ---------------------------------------------------------------------------
+
+enum TicketNoteType {
+  ASSIGNED // aşamaya atandı
+  ACCEPTED // sorumlu kişi "Kabul Et" dedi
+  PARTS_ISSUE // parça eksik/değişimi — müşteri onayı bekleniyor
+  CUSTOMER_APPROVED // müşteriden onay alındı, işleme devam
+  APPROVED // aşama onaylandı, sonraki aşamaya geçildi
+  REJECTED // aşama reddedildi/iade edildi
+  CANCELLED // kayıt iptal edildi
+}
+
+model TicketNote {
+  id        String         @id @default(cuid())
+  ticketId  String
+  ticket    Ticket         @relation(fields: [ticketId], references: [id])
+  stageId   String?
+  stage     Stage?         @relation(fields: [stageId], references: [id])
+  userId    String
+  user      User           @relation(fields: [userId], references: [id])
+  type      TicketNoteType
+  note      String
+  createdAt DateTime       @default(now())
+
+  @@map("ticket_notes")
 }
 
 // ---------------------------------------------------------------------------

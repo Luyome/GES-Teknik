@@ -9,6 +9,10 @@ import type { TicketPriority } from "@/generated/prisma/enums";
 // okuyamadığı gözlemlendi (auth() Server Action içinde tutarsız biçimde
 // null dönüyordu), aynı auth() çağrısı bir Route Handler'da hem GET hem
 // POST'ta sorunsuz çalıştı. Bkz. PROJECT.md.
+//
+// Onaylı akış sistemi güncellemesi: yeni kayıt artık doğrudan "Çalışıyor"
+// (OPEN) değil, "Atandı" (ASSIGNED) durumunda başlar — ilk aşamanın
+// sorumlusu "Kabul Et" demeden işlem yapamaz. Bkz. TicketNote (audit log).
 export async function POST(request: Request) {
   const session = await auth();
   if (!session?.user?.id) {
@@ -18,9 +22,16 @@ export async function POST(request: Request) {
   const formData = await request.formData();
   const customerName = (formData.get("customerName") as string | null)?.trim();
   const customerPhone = (formData.get("customerPhone") as string | null)?.trim();
+  const customerEmail = (formData.get("customerEmail") as string | null)?.trim();
+  const customerAddress = (formData.get("customerAddress") as string | null)?.trim();
   const productInfo = (formData.get("productInfo") as string | null)?.trim();
+  const serialNumber = (formData.get("serialNumber") as string | null)?.trim();
   const issueDescription = (formData.get("issueDescription") as string | null)?.trim();
   const priority = (formData.get("priority") as TicketPriority | null) ?? "NORMAL";
+  const warrantyRaw = formData.get("isUnderWarranty") as string | null;
+  const isUnderWarranty = warrantyRaw === "true" ? true : warrantyRaw === "false" ? false : null;
+  const estimatedDeliveryDateRaw = (formData.get("estimatedDeliveryDate") as string | null)?.trim();
+  const estimatedDeliveryDate = estimatedDeliveryDateRaw ? new Date(estimatedDeliveryDateRaw) : null;
 
   if (!customerName || !productInfo || !issueDescription) {
     return NextResponse.json(
@@ -37,9 +48,14 @@ export async function POST(request: Request) {
     const ticket = await createTicketWithRetry({
       customerName,
       customerPhone,
+      customerEmail,
+      customerAddress,
       productInfo,
+      serialNumber,
       issueDescription,
       priority,
+      isUnderWarranty,
+      estimatedDeliveryDate,
       userId: session.user.id,
     });
 
@@ -56,9 +72,14 @@ export async function POST(request: Request) {
 type CreateTicketInput = {
   customerName: string;
   customerPhone?: string;
+  customerEmail?: string;
+  customerAddress?: string;
   productInfo: string;
+  serialNumber?: string;
   issueDescription: string;
   priority: TicketPriority;
+  isUnderWarranty: boolean | null;
+  estimatedDeliveryDate: Date | null;
   userId: string;
 };
 
@@ -82,7 +103,22 @@ async function createTicketWithRetry(input: CreateTicketInput) {
         });
         if (!customer) {
           customer = await tx.customer.create({
-            data: { name: input.customerName, phone: input.customerPhone || null },
+            data: {
+              name: input.customerName,
+              phone: input.customerPhone || null,
+              email: input.customerEmail || null,
+              address: input.customerAddress || null,
+            },
+          });
+        } else if (input.customerEmail || input.customerAddress || input.customerPhone) {
+          // Mevcut müşteri kaydı varsa yeni girilen iletişim bilgileriyle güncelle.
+          customer = await tx.customer.update({
+            where: { id: customer.id },
+            data: {
+              phone: input.customerPhone || customer.phone,
+              email: input.customerEmail || customer.email,
+              address: input.customerAddress || customer.address,
+            },
           });
         }
 
@@ -97,15 +133,26 @@ async function createTicketWithRetry(input: CreateTicketInput) {
             code,
             customerId: customer.id,
             productInfo: input.productInfo,
+            serialNumber: input.serialNumber || null,
+            isUnderWarranty: input.isUnderWarranty,
+            estimatedDeliveryDate: input.estimatedDeliveryDate,
             issueDescription: input.issueDescription,
             priority: input.priority,
-            status: "OPEN",
+            status: "ASSIGNED",
             currentStageId: firstStage.id,
             stageHistories: {
               create: {
                 stageId: firstStage.id,
                 userId: input.userId,
                 outcome: "IN_PROGRESS",
+              },
+            },
+            notes: {
+              create: {
+                stageId: firstStage.id,
+                userId: input.userId,
+                type: "ASSIGNED",
+                note: `Kayıt oluşturuldu, "${firstStage.name}" aşamasına atandı.`,
               },
             },
           },
