@@ -2,21 +2,10 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { outcomeLabel, outcomeColorVar, type StageOutcome } from "@/components/ui/OutcomeBadge";
 import { getTicketById } from "@/lib/data/tickets";
-
-const OUTCOME_LABEL: Record<string, string> = {
-  IN_PROGRESS: "Devam ediyor",
-  APPROVED: "Onaylandı",
-  REJECTED: "Reddedildi / İade",
-  CANCELLED: "İptal",
-};
-
-const OUTCOME_COLOR: Record<string, string> = {
-  IN_PROGRESS: "var(--color-status-open)",
-  APPROVED: "var(--color-status-completed)",
-  REJECTED: "var(--color-status-cancelled)",
-  CANCELLED: "var(--color-status-cancelled)",
-};
+import { auth } from "@/auth";
+import { StageActions } from "./StageActions";
 
 // Kayıt Detayı — zaman çizelgesi (timeline) görünümü.
 // Bu ekran PROJECT.md Bölüm 4'teki "kayıt bazlı zaman çizelgesi/geçmiş
@@ -25,8 +14,17 @@ export default async function TicketDetailPage({
   params,
 }: PageProps<"/tickets/[id]">) {
   const { id } = await params;
-  const ticket = await getTicketById(id);
+  const [ticket, session] = await Promise.all([getTicketById(id), auth()]);
   if (!ticket) notFound();
+
+  const currentStage = ticket.currentStage;
+  const canAct =
+    !!currentStage &&
+    ticket.status !== "COMPLETED" &&
+    ticket.status !== "CANCELLED" &&
+    !!session?.user?.role &&
+    (session.user.role === "ADMIN" ||
+      session.user.role === currentStage.responsibleRole.name);
 
   return (
     <div className="space-y-6">
@@ -65,6 +63,15 @@ export default async function TicketDetailPage({
         </dl>
       </Card>
 
+      {canAct && currentStage && (
+        <div>
+          <h2 className="text-[13px] font-medium text-label-secondary uppercase tracking-wide mb-2">
+            Aşama İşlem
+          </h2>
+          <StageActions ticketId={ticket.id} stageName={currentStage.name} />
+        </div>
+      )}
+
       <div>
         <h2 className="text-[13px] font-medium text-label-secondary uppercase tracking-wide mb-2">
           Zaman Çizelgesi
@@ -75,15 +82,15 @@ export default async function TicketDetailPage({
               <li key={h.id} className="ml-4">
                 <span
                   className="absolute -ml-[9px] mt-1.5 h-3 w-3 rounded-full border-2 border-surface"
-                  style={{ backgroundColor: OUTCOME_COLOR[h.outcome] }}
+                  style={{ backgroundColor: outcomeColorVar(h.outcome as StageOutcome) }}
                 />
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-medium text-[14px]">{h.stage.name}</span>
                   <span
                     className="text-[12px] font-medium"
-                    style={{ color: OUTCOME_COLOR[h.outcome] }}
+                    style={{ color: outcomeColorVar(h.outcome as StageOutcome) }}
                   >
-                    {OUTCOME_LABEL[h.outcome]}
+                    {outcomeLabel(h.outcome as StageOutcome)}
                   </span>
                 </div>
                 <div className="text-label-secondary text-[13px]">

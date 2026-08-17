@@ -1,13 +1,17 @@
+import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { getAllStages } from "@/lib/data/tickets";
+import { auth } from "@/auth";
+import { StageManager } from "./StageManager";
 
 export const dynamic = "force-dynamic";
 
 // Ayarlar — iş akışı aşama tanımlarının yönetimi (PROJECT.md Bölüm 2:
-// "aşama zinciri parametrik/yapılandırılabilir olmalı"). Şu an salt okunur
-// önizleme; düzenleme Faz 2'de eklenecek.
+// "aşama zinciri parametrik/yapılandırılabilir olmalı"). ADMIN için
+// düzenlenebilir, diğer roller için salt okunur.
 export default async function SettingsPage() {
-  const stages = await getAllStages();
+  const [stages, session] = await Promise.all([getAllStages(), auth()]);
+  const isAdmin = session?.user?.role === "ADMIN";
 
   return (
     <div className="space-y-6">
@@ -18,16 +22,30 @@ export default async function SettingsPage() {
         </p>
       </header>
 
-      <Card className="p-0 divide-y divide-border">
-        {stages.map((stage) => (
-          <div key={stage.id} className="flex items-center gap-3 px-4 py-3.5">
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-surface-2 text-[12px] font-medium text-label-secondary">
-              {stage.order}
-            </span>
-            <span className="text-[15px]">{stage.name}</span>
-          </div>
-        ))}
-      </Card>
+      <div className="flex flex-wrap gap-2">
+        <Link
+          href="/settings/profile"
+          className="rounded-[var(--radius-pill)] bg-surface-2 border border-border text-[13px] font-medium px-3.5 py-2"
+        >
+          Şifremi Değiştir
+        </Link>
+        {isAdmin && (
+          <Link
+            href="/settings/users"
+            className="rounded-[var(--radius-pill)] bg-surface-2 border border-border text-[13px] font-medium px-3.5 py-2"
+          >
+            Kullanıcı Yönetimi
+          </Link>
+        )}
+      </div>
+
+      <StageManager stages={stages} isAdmin={isAdmin} />
+
+      {!isAdmin && stages.length === 0 && (
+        <Card className="text-center py-12">
+          <p className="text-label-secondary text-[15px]">Henüz aşama tanımlanmadı.</p>
+        </Card>
+      )}
     </div>
   );
 }

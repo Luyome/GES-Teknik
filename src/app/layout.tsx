@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AppShell } from "@/components/layout/AppShell";
 import { SignOutButton } from "@/components/layout/SignOutButton";
+import { ToastProvider } from "@/components/ui/Toast";
 
 export const metadata: Metadata = {
   title: "GES Teknik",
@@ -21,7 +22,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="tr" className="h-full antialiased">
       <body className="min-h-full bg-canvas text-label">
-        <AppShell signOutSlot={<SignOutButton />}>{children}</AppShell>
+        <ToastProvider>
+          <AppShell signOutSlot={<SignOutButton />}>{children}</AppShell>
+        </ToastProvider>
       </body>
     </html>
   );

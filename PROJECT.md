@@ -33,9 +33,30 @@ Ayrıca tamamlananlar:
 - [x] **Gerçek veri sorguları** — Dashboard, Kayıtlar, Kayıt Detayı, Ayarlar artık mock veri değil, `src/lib/data/tickets.ts` üzerinden gerçek Prisma/Neon sorguları kullanıyor.
 - [x] **Yeni Kayıt akışı** — `/tickets/create` formu, `/api/tickets` Route Handler'ına POST atarak gerçek `Ticket` + ilk `StageHistory` kaydı oluşturuyor. Hem yerelde hem production'da (Vercel) uçtan uca test edildi.
 
+Ayrıca tamamlananlar (Faz 2 — İş Akışı Motoru):
+- [x] **Aşama geçiş motoru** — `/api/tickets/[id]/transitions` Route Handler'ı: Onay (sonraki aşamaya geçiş / son aşamaysa `COMPLETED`), Red-İade (önceki aşamaya dönüş, `ON_HOLD`), İptal (`CANCELLED`). Her geçişte açık `StageHistory` satırı kapatılır (`exitedAt`), yenisi açılır — audit trail tam işliyor. Yetki kontrolü: yalnızca `Stage.responsibleRole`'e sahip kullanıcı veya `ADMIN` işlem yapabilir (`src/app/tickets/[id]/StageActions.tsx`).
+- [x] **Ayarlar → Aşama yönetimi** — ADMIN, `/api/stages` üzerinden yeni aşama ekleyebilir, sırasını (yukarı/aşağı) değiştirebilir, aktif/pasif yapabilir.
+- [x] **Kullanıcı yönetimi** — `/settings/users` (ADMIN): kullanıcı oluşturma, rol atama, aktif/pasif.
+- [x] **Şifre değiştirme** — `/settings/profile`: oturum sahibi kendi şifresini değiştirebilir. **İlk admin şifresi (`GesTeknik2026!`) ilk girişte buradan değiştirilmeli.**
+- [x] Ticket kodu üretimindeki (`GES-YYYY-NNNN`) race condition, `prisma.$transaction` + unique-conflict retry ile giderildi (`src/app/api/tickets/route.ts`).
+
+Ayrıca tamamlananlar (Faz 3 — Dashboard ve Raporlama):
+- [x] **Raporlar sayfası** (`src/app/reports/`) — tarih aralığı/aşama/durum filtreleri, özet sayaçlar, aşama bazlı ortalama/maksimum süre analizi ve darboğaz (bottleneck) rozeti (`src/lib/data/reports.ts`).
+- [x] **CSV dışa aktarma** — `/api/reports/export` (aynı filtrelerle, Excel'de doğrudan açılabilir UTF-8 BOM'lu CSV).
+
+Ayrıca tamamlananlar (Faz 4 — Mobil UX Cilası):
+- [x] Uygulama içi toast bildirimleri (`src/components/ui/Toast.tsx`) — aşama işlemleri ve şifre değişikliğinde "işlem başarılı" geri bildirimi.
+- [x] Sayfa geçişlerinde iskelet (skeleton) yükleme durumları (`loading.tsx` — dashboard/tickets/reports).
+
+Faz 5 — IIS'e Yerel Kurulum (hazırlık tamamlandı, fiili kurulum bekliyor):
+- [x] `deploy/web.config` (ARR reverse-proxy config), `deploy/setup-iis.ps1` (IIS/ARR kurulum + servis kaydı scripti), `deploy/README.md` (adım adım talimat) repoya eklendi.
+- [ ] **Fiili IIS kurulumu kullanıcı tarafından yapılmalı** — bu geliştirme makinesinde IIS kurulu değil (`W3SVC` servisi yok, `C:\inetpub\wwwroot` yok) ve kurulumu Yönetici yetkisi gerektiriyor; Claude'un çalıştığı shell admin değil. Bkz. `deploy/README.md`.
+
 Yapılacaklar:
-- [ ] İlk admin şifresinin değiştirilmesi / kullanıcı yönetimi ekranı
-- [ ] Raporlama modülü (Faz 3)
+- [ ] Faz 5'in fiili IIS kurulumu (kullanıcı, admin PowerShell ile `deploy/setup-iis.ps1` çalıştıracak).
+- [ ] PDF export (şu an sadece CSV var — talep gelirse eklenecek).
+- [ ] Attachment (fotoğraf/dosya) yükleme UI'ı — şema hazır (`Attachment` modeli), UI bağlanmadı.
+- [ ] Part/PartUsage (parça-stok) UI'ı — şema hazır, kapsam dışı bırakıldı (PROJECT.md Bölüm 11'de açık soru).
 
 ### Kurulum sırasında öğrenilen önemli teknik notlar
 - **Next.js 16**: `middleware.js` kaldırıldı, yerine **`proxy.js`** geldi (davranış aynı, sadece isim değişti). Proje `src/proxy.ts` kullanıyor.
@@ -195,11 +216,11 @@ Proje şu akışla ilerleyecek:
 
 ## 10. Yol Haritası (Faz Planı)
 
-- **Faz 1 — Temel İskelet:** Next.js + Prisma + Neon bağlantısı, temel veri modeli, kimlik doğrulama, rol yapısı.
-- **Faz 2 — İş Akışı Motoru:** Aşama tanımları, aşama geçiş mantığı, StageHistory loglama.
-- **Faz 3 — Dashboard ve Raporlama:** Canlı durum panosu, zaman çizelgesi, süre metrikleri, raporlar.
-- **Faz 4 — Mobil UX Cilası:** Apple HIG + banka UX prensiplerine göre arayüz inceltme, responsive/mobil optimizasyon.
-- **Faz 5 — IIS'e Yerel Kurulum:** Yerel sunucuya kurulum, IIS yapılandırması, canlıya alma.
+- **Faz 1 — Temel İskelet:** ✅ Tamamlandı. Next.js + Prisma + Neon bağlantısı, temel veri modeli, kimlik doğrulama, rol yapısı.
+- **Faz 2 — İş Akışı Motoru:** ✅ Tamamlandı. Aşama tanımları, aşama geçiş mantığı, StageHistory loglama, kullanıcı yönetimi.
+- **Faz 3 — Dashboard ve Raporlama:** ✅ Tamamlandı. Canlı durum panosu, zaman çizelgesi, süre metrikleri, raporlar, CSV export.
+- **Faz 4 — Mobil UX Cilası:** ✅ Tamamlandı (temel kapsam). Toast bildirimleri, skeleton yükleme durumları; HIG token'ları Faz 1'den beri mevcuttu.
+- **Faz 5 — IIS'e Yerel Kurulum:** 🟡 Hazırlık tamamlandı (`deploy/`), fiili kurulum kullanıcıyı bekliyor — admin yetkisi gerektiriyor, bkz. `deploy/README.md`.
 
 ---
 

@@ -30,47 +30,17 @@ export async function POST(request: Request) {
   }
 
   try {
-    const firstStage = await prisma.stage.findFirst({ orderBy: { order: "asc" } });
-    if (!firstStage) {
-      return NextResponse.json(
-        { error: "Tanımlı bir iş akışı aşaması bulunamadı. Önce Ayarlar'dan aşama tanımlayın." },
-        { status: 400 }
-      );
-    }
-
-    // Aynı isimli müşteri varsa onu kullan, yoksa yeni oluştur (basit eşleştirme).
-    let customer = await prisma.customer.findFirst({
-      where: { name: { equals: customerName, mode: "insensitive" } },
-    });
-    if (!customer) {
-      customer = await prisma.customer.create({
-        data: { name: customerName, phone: customerPhone || null },
-      });
-    }
-
-    const year = new Date().getFullYear();
-    const ticketCountThisYear = await prisma.ticket.count({
-      where: { entryDate: { gte: new Date(`${year}-01-01`) } },
-    });
-    const code = `GES-${year}-${String(ticketCountThisYear + 1).padStart(4, "0")}`;
-
-    const ticket = await prisma.ticket.create({
-      data: {
-        code,
-        customerId: customer.id,
-        productInfo,
-        issueDescription,
-        priority,
-        status: "OPEN",
-        currentStageId: firstStage.id,
-        stageHistories: {
-          create: {
-            stageId: firstStage.id,
-            userId: session.user.id,
-            outcome: "IN_PROGRESS",
-          },
-        },
-      },
+    // Not: `code` üretimi (yıl bazlı sıra numarası) ve müşteri eşleştirmesi
+    // eş zamanlı isteklerde çakışabileceğinden bir transaction içinde
+    // yapılıyor; `code` çakışırsa (unique constraint) birkaç kez yeniden
+    // dener. Bkz. PROJECT.md — bu race condition Faz 1'de not edilmişti.
+    const ticket = await createTicketWithRetry({
+      customerName,
+      customerPhone,
+      productInfo,
+      issueDescription,
+      priority,
+      userId: session.user.id,
     });
 
     return NextResponse.json({ id: ticket.id });
@@ -81,4 +51,73 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
+}
+
+type CreateTicketInput = {
+  customerName: string;
+  customerPhone?: string;
+  productInfo: string;
+  issueDescription: string;
+  priority: TicketPriority;
+  userId: string;
+};
+
+const MAX_CODE_RETRIES = 3;
+
+async function createTicketWithRetry(input: CreateTicketInput) {
+  for (let attempt = 1; attempt <= MAX_CODE_RETRIES; attempt++) {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const firstStage = await tx.stage.findFirst({
+          where: { isActive: true },
+          orderBy: { order: "asc" },
+        });
+        if (!firstStage) {
+          throw new Error("Tanımlı bir iş akışı aşaması bulunamadı. Önce Ayarlar'dan aşama tanımlayın.");
+        }
+
+        // Aynı isimli müşteri varsa onu kullan, yoksa yeni oluştur (basit eşleştirme).
+        let customer = await tx.customer.findFirst({
+          where: { name: { equals: input.customerName, mode: "insensitive" } },
+        });
+        if (!customer) {
+          customer = await tx.customer.create({
+            data: { name: input.customerName, phone: input.customerPhone || null },
+          });
+        }
+
+        const year = new Date().getFullYear();
+        const ticketCountThisYear = await tx.ticket.count({
+          where: { entryDate: { gte: new Date(`${year}-01-01`) } },
+        });
+        const code = `GES-${year}-${String(ticketCountThisYear + 1).padStart(4, "0")}`;
+
+        return tx.ticket.create({
+          data: {
+            code,
+            customerId: customer.id,
+            productInfo: input.productInfo,
+            issueDescription: input.issueDescription,
+            priority: input.priority,
+            status: "OPEN",
+            currentStageId: firstStage.id,
+            stageHistories: {
+              create: {
+                stageId: firstStage.id,
+                userId: input.userId,
+                outcome: "IN_PROGRESS",
+              },
+            },
+          },
+        });
+      });
+    } catch (err) {
+      // Prisma unique constraint hatası (P2002) → code çakışması, yeniden dene.
+      const isUniqueConflict =
+        typeof err === "object" && err !== null && "code" in err && (err as { code?: string }).code === "P2002";
+      if (isUniqueConflict && attempt < MAX_CODE_RETRIES) continue;
+      throw err;
+    }
+  }
+  throw new Error("Kayıt kodu üretilemedi, lütfen tekrar deneyin.");
 }

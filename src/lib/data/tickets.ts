@@ -4,7 +4,10 @@ import { prisma } from "@/lib/prisma";
 // Bkz. PROJECT.md Bölüm 5 (Veri Modeli) ve Bölüm 4 (İzleme/Raporlama).
 
 export function getAllStages() {
-  return prisma.stage.findMany({ orderBy: { order: "asc" } });
+  return prisma.stage.findMany({
+    include: { responsibleRole: true },
+    orderBy: { order: "asc" },
+  });
 }
 
 export function getAllTickets() {
@@ -19,7 +22,7 @@ export function getTicketById(id: string) {
     where: { id },
     include: {
       customer: true,
-      currentStage: true,
+      currentStage: { include: { responsibleRole: true } },
       assignedTechnician: true,
       stageHistories: {
         include: { stage: true, user: true },
