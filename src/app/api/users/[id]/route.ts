@@ -26,8 +26,10 @@ export async function PATCH(
     return NextResponse.json({ error: "Kendi hesabınızı pasifleştiremezsiniz." }, { status: 400 });
   }
 
-  const data: { isActive?: boolean; roleId?: string } = {};
+  const data: { isActive?: boolean; roleId?: string; specialty?: string | null; isAvailable?: boolean } = {};
   if (typeof body?.isActive === "boolean") data.isActive = body.isActive;
+  if (typeof body?.isAvailable === "boolean") data.isAvailable = body.isAvailable;
+  if (typeof body?.specialty === "string") data.specialty = body.specialty.trim() || null;
   if (typeof body?.roleName === "string") {
     const role = await prisma.role.findUnique({ where: { name: body.roleName as RoleName } });
     if (!role) return NextResponse.json({ error: "Geçersiz rol." }, { status: 400 });

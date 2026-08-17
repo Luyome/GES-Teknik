@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { getTicketById, getCustomerApprovalRoleName } from "@/lib/data/tickets";
+import { getTicketById, getCustomerApprovalRoleName, getNextStageRequiresTechnician } from "@/lib/data/tickets";
 import { NOTE_TYPE_LABEL, NOTE_TYPE_COLOR } from "@/lib/ticket-note-labels";
 import { auth } from "@/auth";
 import { StageActions } from "./StageActions";
@@ -25,6 +25,9 @@ export default async function TicketDetailPage({
   if (!ticket) notFound();
 
   const currentStage = ticket.currentStage;
+  const nextStageRequiresTechnician = currentStage
+    ? await getNextStageRequiresTechnician(currentStage.order)
+    : false;
   const isAdmin = session?.user?.role === "ADMIN";
   const isStageResponsible = !!currentStage && session?.user?.role === currentStage.responsibleRole.name;
   // "Müşteri Onayladı" yetkisi currentStage'in sorumlusuna değil, Ayarlar'da
@@ -124,6 +127,7 @@ export default async function TicketDetailPage({
             status={ticket.status}
             allowsPartsRequest={currentStage.allowsPartsRequest}
             isUnderWarranty={ticket.isUnderWarranty}
+            nextStageRequiresTechnician={nextStageRequiresTechnician}
           />
         </div>
       )}
@@ -196,6 +200,32 @@ export default async function TicketDetailPage({
                 </li>
               ))}
             </ol>
+          )}
+        </Card>
+      </div>
+
+      <div>
+        <h2 className="text-[13px] font-medium text-label-secondary uppercase tracking-wide mb-2">
+          SMS Bildirimleri
+        </h2>
+        <Card className="space-y-2">
+          <p className="text-label-tertiary text-[12px]">
+            Bu bir simülasyondur, gerçek SMS gönderilmez — bkz. src/lib/sms.ts.
+          </p>
+          {ticket.smsLogs.length === 0 ? (
+            <p className="text-label-secondary text-[14px]">Henüz bildirim yok.</p>
+          ) : (
+            <ul className="space-y-2">
+              {ticket.smsLogs.map((s) => (
+                <li key={s.id} className="text-[13px] border-t border-border pt-2 first:border-0 first:pt-0">
+                  <div className="text-label-tertiary text-[12px]">
+                    📱 {s.toPhone ?? "(telefon yok)"} ·{" "}
+                    {s.createdAt.toLocaleString("tr-TR", { dateStyle: "short", timeStyle: "short" })}
+                  </div>
+                  <div>{s.message}</div>
+                </li>
+              ))}
+            </ul>
           )}
         </Card>
       </div>

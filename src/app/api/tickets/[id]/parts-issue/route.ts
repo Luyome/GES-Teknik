@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { sendSimulatedSms } from "@/lib/sms";
+import { checkStageAuthorization } from "@/lib/stage-auth";
 
 // "Parça Eksik / Müşteri Onayı Gerekli" — kayıt aynı aşamada kalır, sadece
 // müşteri onayı beklenirken durur (ON_HOLD). Aşama/StageHistory değişmez;
@@ -41,7 +43,7 @@ export async function POST(
     const result = await prisma.$transaction(async (tx) => {
       const ticket = await tx.ticket.findUnique({
         where: { id: ticketId },
-        include: { currentStage: { include: { responsibleRole: true } } },
+        include: { currentStage: { include: { responsibleRole: true } }, customer: true },
       });
       if (!ticket) return { error: "Kayıt bulunamadı.", status: 404 } as const;
       if (ticket.status !== "OPEN") {
@@ -57,13 +59,14 @@ export async function POST(
         } as const;
       }
 
-      const isAdmin = session.user.role === "ADMIN";
-      const isResponsible = session.user.role === ticket.currentStage.responsibleRole.name;
-      if (!isAdmin && !isResponsible) {
-        return {
-          error: `Bu aşamayı yalnızca "${ticket.currentStage.responsibleRole.name}" rolü işleyebilir.`,
-          status: 403,
-        } as const;
+      const authCheck = checkStageAuthorization({
+        userRole: session.user.role,
+        userId: session.user.id!,
+        stageResponsibleRole: ticket.currentStage.responsibleRole.name,
+        assignedTechnicianId: ticket.assignedTechnicianId,
+      });
+      if (!authCheck.ok) {
+        return { error: authCheck.error, status: 403 } as const;
       }
 
       const underWarranty = ticket.isUnderWarranty === true;
@@ -112,6 +115,13 @@ export async function POST(
       const updated = await tx.ticket.update({
         where: { id: ticketId },
         data: { status: "ON_HOLD" },
+      });
+      await sendSimulatedSms(tx, {
+        ticketId,
+        toPhone: ticket.customer.phone,
+        message: underWarranty
+          ? `Sayın ${ticket.customer.name}, ${ticket.code} kodlu kaydınızda parça değişimi gerekiyor (garanti kapsamında, ücretsiz). Onayınız bekleniyor.`
+          : `Sayın ${ticket.customer.name}, ${ticket.code} kodlu kaydınız için ₺${total.toFixed(2)} tutarında parça değişimi öneriliyor. Onayınız bekleniyor.`,
       });
       return { ticket: updated } as const;
     });

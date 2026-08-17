@@ -21,6 +21,7 @@ export function NewTicketForm() {
   const router = useRouter();
   const [error, setError] = useState<string | undefined>();
   const [isPending, setIsPending] = useState(false);
+  const [isUnderWarranty, setIsUnderWarranty] = useState("");
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -160,7 +161,13 @@ export function NewTicketForm() {
             <label htmlFor="isUnderWarranty" className="text-[13px] text-label-secondary">
               Garanti Kapsamında mı?
             </label>
-            <select id="isUnderWarranty" name="isUnderWarranty" defaultValue="" className={fieldClass}>
+            <select
+              id="isUnderWarranty"
+              name="isUnderWarranty"
+              value={isUnderWarranty}
+              onChange={(e) => setIsUnderWarranty(e.target.value)}
+              className={fieldClass}
+            >
               <option value="">Belirtilmedi (Ön İnceleme&apos;de teyit edilecek)</option>
               <option value="true">Evet, garanti kapsamında</option>
               <option value="false">Hayır, garanti dışı</option>
@@ -184,11 +191,29 @@ export function NewTicketForm() {
             />
           </div>
         </div>
-        <p className="text-label-tertiary text-[12px]">
-          Fatura fotoğrafı, kayıt oluşturulduktan sonra kayıt detayındaki &quot;Fotoğraf / Dosya
-          Ekleri&quot; bölümünden &quot;Fatura&quot; olarak yüklenebilir — garanti doğrulaması Ön
-          İnceleme aşamasında yapılır.
-        </p>
+        {isUnderWarranty === "true" ? (
+          <div className="space-y-1.5">
+            <label htmlFor="invoiceFile" className="text-[13px] text-label-secondary">
+              Fatura Fotoğrafı / Belgesi (opsiyonel)
+            </label>
+            <input
+              id="invoiceFile"
+              name="invoiceFile"
+              type="file"
+              accept="image/*,application/pdf"
+              className="w-full text-[13px] text-label-secondary file:mr-3 file:rounded-[var(--radius-pill)] file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-[13px] file:font-medium"
+            />
+            <p className="text-label-tertiary text-[12px]">
+              Garanti kapsamında olduğu belirtildi — Ön İnceleme aşamasında doğrulama için faturayı
+              şimdi ekleyebilirsiniz (sonradan kayıt detayından da eklenebilir).
+            </p>
+          </div>
+        ) : (
+          <p className="text-label-tertiary text-[12px]">
+            Fatura fotoğrafı, kayıt oluşturulduktan sonra kayıt detayındaki &quot;Fotoğraf / Dosya
+            Ekleri&quot; bölümünden &quot;Fatura&quot; olarak da yüklenebilir.
+          </p>
+        )}
       </fieldset>
 
       {error && <p className="text-[13px] text-red">{error}</p>}

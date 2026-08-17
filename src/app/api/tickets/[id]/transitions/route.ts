@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { sendSimulatedSms } from "@/lib/sms";
+import { checkStageAuthorization } from "@/lib/stage-auth";
 import type { StageOutcome } from "@/generated/prisma/enums";
 
 // Aşama geçiş endpoint'i — PROJECT.md Bölüm 2 (Aşama kuralları) ve onaylı
@@ -11,8 +13,13 @@ import type { StageOutcome } from "@/generated/prisma/enums";
 // Red/İade (önceki aşamaya geri dönüş), İptal. Bu endpoint yalnızca kayıt
 // "Çalışıyor" (OPEN) durumundayken çağrılabilir — yani sorumlu kişi önce
 // "Kabul Et" (/api/tickets/[id]/accept) demiş olmalı. Her geçişte zaman
-// damgası, kullanıcı ve not otomatik loglanır (StageHistory + TicketNote).
+// damgası, kullanıcı ve not otomatik loglanır (StageHistory + TicketNote),
+// ve müşteriye bir SMS simülasyonu gönderilir (bkz. src/lib/sms.ts).
 // Not artık TÜM sonuçlarda zorunludur (tam audit trail).
+//
+// Teknisyen havuzu: sonraki aşamanın sorumlusu Teknisyen ise, `technicianId`
+// zorunludur (havuzdan seçilen belirli bir teknisyene atama) — bkz.
+// src/lib/data/technicians.ts ve /api/technicians.
 const VALID_OUTCOMES: StageOutcome[] = ["APPROVED", "REJECTED", "CANCELLED"];
 
 export async function POST(
@@ -28,6 +35,7 @@ export async function POST(
   const body = await request.json().catch(() => null);
   const outcome = body?.outcome as StageOutcome | undefined;
   const note = (body?.note as string | undefined)?.trim();
+  const technicianId = body?.technicianId as string | undefined;
 
   if (!outcome || !VALID_OUTCOMES.includes(outcome)) {
     return NextResponse.json({ error: "Geçersiz işlem sonucu." }, { status: 400 });
@@ -40,7 +48,7 @@ export async function POST(
     const result = await prisma.$transaction(async (tx) => {
       const ticket = await tx.ticket.findUnique({
         where: { id: ticketId },
-        include: { currentStage: { include: { responsibleRole: true } } },
+        include: { currentStage: { include: { responsibleRole: true } }, customer: true },
       });
 
       if (!ticket) {
@@ -59,13 +67,43 @@ export async function POST(
         return { error: "Kaydın mevcut bir aşaması yok.", status: 400 } as const;
       }
 
-      const isAdmin = session.user.role === "ADMIN";
-      const isResponsible = session.user.role === ticket.currentStage.responsibleRole.name;
-      if (!isAdmin && !isResponsible) {
-        return {
-          error: `Bu aşamayı yalnızca "${ticket.currentStage.responsibleRole.name}" rolü işleyebilir.`,
-          status: 403,
-        } as const;
+      const authCheck = checkStageAuthorization({
+        userRole: session.user.role,
+        userId: session.user.id!,
+        stageResponsibleRole: ticket.currentStage.responsibleRole.name,
+        assignedTechnicianId: ticket.assignedTechnicianId,
+      });
+      if (!authCheck.ok) {
+        return { error: authCheck.error, status: 403 } as const;
+      }
+
+      // APPROVED'da sonraki aşama Teknisyen sorumluluğundaysa havuzdan seçim zorunlu.
+      const nextStageWithRole =
+        outcome === "APPROVED"
+          ? await tx.stage.findFirst({
+              where: { isActive: true, order: { gt: ticket.currentStage.order } },
+              orderBy: { order: "asc" },
+              include: { responsibleRole: true },
+            })
+          : null;
+      const nextStage = nextStageWithRole;
+      let selectedTechnicianId: string | null = null;
+      if (outcome === "APPROVED") {
+        if (nextStage && nextStage.responsibleRole.name === "TECHNICIAN") {
+          if (!technicianId) {
+            return { error: "Sonraki aşama için havuzdan bir teknisyen seçmelisiniz.", status: 400 } as const;
+          }
+          const technician = await tx.user.findUnique({ where: { id: technicianId }, include: { role: true } });
+          if (
+            !technician ||
+            technician.role.name !== "TECHNICIAN" ||
+            !technician.isActive ||
+            !technician.isAvailable
+          ) {
+            return { error: "Seçilen teknisyen uygun değil (aktif/müsait olmalı).", status: 400 } as const;
+          }
+          selectedTechnicianId = technician.id;
+        }
       }
 
       // Açık StageHistory satırını kapat.
@@ -102,6 +140,11 @@ export async function POST(
         await tx.ticketNote.create({
           data: { ticketId, stageId: ticket.currentStageId, userId: session.user.id!, type: "CANCELLED", note },
         });
+        await sendSimulatedSms(tx, {
+          ticketId,
+          toPhone: ticket.customer.phone,
+          message: `Sayın ${ticket.customer.name}, ${ticket.code} kodlu kaydınız iptal edilmiştir.`,
+        });
         return { ticket: updated } as const;
       }
 
@@ -110,23 +153,27 @@ export async function POST(
           data: { ticketId, stageId: ticket.currentStageId, userId: session.user.id!, type: "APPROVED", note },
         });
 
-        const nextStage = await tx.stage.findFirst({
-          where: { isActive: true, order: { gt: ticket.currentStage.order } },
-          orderBy: { order: "asc" },
-        });
-
         if (!nextStage) {
           // Son aşama onaylandı — kayıt tamamlandı.
           const updated = await tx.ticket.update({
             where: { id: ticketId },
             data: { status: "COMPLETED", currentStageId: null, exitDate: now },
           });
+          await sendSimulatedSms(tx, {
+            ticketId,
+            toPhone: ticket.customer.phone,
+            message: `Sayın ${ticket.customer.name}, ${ticket.code} kodlu kaydınız tamamlanmıştır, teslime hazırdır.`,
+          });
           return { ticket: updated } as const;
         }
 
         const updated = await tx.ticket.update({
           where: { id: ticketId },
-          data: { status: "ASSIGNED", currentStageId: nextStage.id },
+          data: {
+            status: "ASSIGNED",
+            currentStageId: nextStage.id,
+            ...(selectedTechnicianId ? { assignedTechnicianId: selectedTechnicianId } : {}),
+          },
         });
         await tx.stageHistory.create({
           data: {
@@ -144,6 +191,11 @@ export async function POST(
             type: "ASSIGNED",
             note: `"${nextStage.name}" aşamasına atandı.`,
           },
+        });
+        await sendSimulatedSms(tx, {
+          ticketId,
+          toPhone: ticket.customer.phone,
+          message: `Sayın ${ticket.customer.name}, ${ticket.code} kodlu kaydınız "${nextStage.name}" aşamasına geçmiştir.`,
         });
         return { ticket: updated } as const;
       }
@@ -179,6 +231,11 @@ export async function POST(
           type: "ASSIGNED",
           note: `İade edildi, "${targetStage.name}" aşamasına yeniden atandı.`,
         },
+      });
+      await sendSimulatedSms(tx, {
+        ticketId,
+        toPhone: ticket.customer.phone,
+        message: `Sayın ${ticket.customer.name}, ${ticket.code} kodlu kaydınız "${targetStage.name}" aşamasına iade edilmiştir.`,
       });
       return { ticket: updated } as const;
     });

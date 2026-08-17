@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { sendSimulatedSms } from "@/lib/sms";
 
 // "Müşteri Onayladı" — müşteri onayı sistem dışında (telefon/whatsapp vb.)
 // alındıktan sonra personel/admin bu butona basarak kaydı aynı aşamada
@@ -33,7 +34,7 @@ export async function POST(
     const result = await prisma.$transaction(async (tx) => {
       const ticket = await tx.ticket.findUnique({
         where: { id: ticketId },
-        include: { currentStage: { include: { responsibleRole: true } } },
+        include: { currentStage: { include: { responsibleRole: true } }, customer: true },
       });
       if (!ticket) return { error: "Kayıt bulunamadı.", status: 404 } as const;
       if (ticket.status !== "ON_HOLD") {
@@ -70,6 +71,11 @@ export async function POST(
           type: "CUSTOMER_APPROVED",
           note,
         },
+      });
+      await sendSimulatedSms(tx, {
+        ticketId,
+        toPhone: ticket.customer.phone,
+        message: `Sayın ${ticket.customer.name}, ${ticket.code} kodlu kaydınız için onayınız alınmıştır, işleme devam ediliyor.`,
       });
       return { ticket: updated } as const;
     });

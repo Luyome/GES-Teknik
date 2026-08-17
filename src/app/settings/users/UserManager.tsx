@@ -13,6 +13,9 @@ type User = {
   email: string;
   isActive: boolean;
   role: RoleName;
+  specialty: string | null;
+  isAvailable: boolean;
+  workload: number;
 };
 
 const fieldClass =
@@ -28,6 +31,7 @@ export function UserManager({ users, currentUserId }: { users: User[]; currentUs
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [roleName, setRoleName] = useState<RoleName>("TECHNICIAN");
+  const [specialty, setSpecialty] = useState("");
   const [creating, setCreating] = useState(false);
 
   async function patchUser(id: string, body: Record<string, unknown>) {
@@ -60,7 +64,7 @@ export function UserManager({ users, currentUserId }: { users: User[]; currentUs
       const res = await fetch("/api/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password, roleName }),
+        body: JSON.stringify({ name, email, password, roleName, specialty: specialty || undefined }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -70,6 +74,7 @@ export function UserManager({ users, currentUserId }: { users: User[]; currentUs
       setName("");
       setEmail("");
       setPassword("");
+      setSpecialty("");
       showToast("Kullanıcı oluşturuldu.");
       router.refresh();
     } catch {
@@ -83,35 +88,62 @@ export function UserManager({ users, currentUserId }: { users: User[]; currentUs
     <div className="space-y-4">
       <Card className="p-0 divide-y divide-border">
         {users.map((u) => (
-          <div key={u.id} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 px-4 py-3.5">
-            <div className="min-w-0 flex-1">
-              <div className={`text-[15px] font-medium ${!u.isActive ? "text-label-tertiary" : ""}`}>
-                {u.name} {u.id === currentUserId && <span className="text-label-tertiary text-[12px]">(siz)</span>}
+          <div key={u.id} className="flex flex-col gap-2 px-4 py-3.5">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+              <div className="min-w-0 flex-1">
+                <div className={`text-[15px] font-medium ${!u.isActive ? "text-label-tertiary" : ""}`}>
+                  {u.name} {u.id === currentUserId && <span className="text-label-tertiary text-[12px]">(siz)</span>}
+                </div>
+                <div className="text-label-secondary text-[13px] truncate">{u.email}</div>
               </div>
-              <div className="text-label-secondary text-[13px] truncate">{u.email}</div>
+              <div className="flex items-center gap-2 shrink-0">
+                <select
+                  defaultValue={u.role}
+                  disabled={busyId === u.id}
+                  onChange={(e) => patchUser(u.id, { roleName: e.target.value })}
+                  className="rounded-[var(--radius-control)] border border-border bg-surface-2 px-2.5 py-1.5 text-[13px]"
+                >
+                  {ROLE_OPTIONS.map((r) => (
+                    <option key={r} value={r}>
+                      {ROLE_LABEL[r]}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={busyId === u.id || u.id === currentUserId}
+                  onClick={() => patchUser(u.id, { isActive: !u.isActive })}
+                  className="rounded-[var(--radius-pill)] bg-surface-2 text-[12px] font-medium px-2.5 py-1.5 disabled:opacity-40"
+                >
+                  {u.isActive ? "Pasifleştir" : "Aktifleştir"}
+                </button>
+              </div>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <select
-                defaultValue={u.role}
-                disabled={busyId === u.id}
-                onChange={(e) => patchUser(u.id, { roleName: e.target.value })}
-                className="rounded-[var(--radius-control)] border border-border bg-surface-2 px-2.5 py-1.5 text-[13px]"
-              >
-                {ROLE_OPTIONS.map((r) => (
-                  <option key={r} value={r}>
-                    {ROLE_LABEL[r]}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                disabled={busyId === u.id || u.id === currentUserId}
-                onClick={() => patchUser(u.id, { isActive: !u.isActive })}
-                className="rounded-[var(--radius-pill)] bg-surface-2 text-[12px] font-medium px-2.5 py-1.5 disabled:opacity-40"
-              >
-                {u.isActive ? "Pasifleştir" : "Aktifleştir"}
-              </button>
-            </div>
+
+            {u.role === "TECHNICIAN" && (
+              <div className="flex flex-wrap items-center gap-2 pl-0 sm:pl-1">
+                <input
+                  defaultValue={u.specialty ?? ""}
+                  placeholder="Uzmanlık alanı"
+                  disabled={busyId === u.id}
+                  onBlur={(e) => {
+                    if (e.target.value !== (u.specialty ?? "")) patchUser(u.id, { specialty: e.target.value });
+                  }}
+                  className="rounded-[var(--radius-control)] border border-border bg-surface-2 px-2.5 py-1.5 text-[13px] w-48"
+                />
+                <span className="text-label-tertiary text-[12px]">İş yükü: {u.workload}</span>
+                <button
+                  type="button"
+                  disabled={busyId === u.id}
+                  onClick={() => patchUser(u.id, { isAvailable: !u.isAvailable })}
+                  className={`rounded-[var(--radius-pill)] text-[11px] font-medium px-2.5 py-1 ${
+                    u.isAvailable ? "bg-green/15 text-green" : "bg-red/15 text-red"
+                  }`}
+                >
+                  {u.isAvailable ? "Çalışıyor" : "Çalışmıyor"}
+                </button>
+              </div>
+            )}
           </div>
         ))}
       </Card>
@@ -156,6 +188,14 @@ export function UserManager({ users, currentUserId }: { users: User[]; currentUs
               </option>
             ))}
           </select>
+          {roleName === "TECHNICIAN" && (
+            <input
+              placeholder="Uzmanlık alanı (opsiyonel)"
+              value={specialty}
+              onChange={(e) => setSpecialty(e.target.value)}
+              className={fieldClass + " sm:col-span-2"}
+            />
+          )}
           <button
             type="submit"
             disabled={creating}

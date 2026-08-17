@@ -23,6 +23,13 @@ export async function GET() {
     include: { role: true },
     orderBy: { createdAt: "asc" },
   });
+  const workloads = await prisma.ticket.groupBy({
+    by: ["assignedTechnicianId"],
+    where: { assignedTechnicianId: { not: null }, status: { notIn: ["COMPLETED", "CANCELLED"] } },
+    _count: { _all: true },
+  });
+  const workloadMap = new Map(workloads.map((w) => [w.assignedTechnicianId, w._count._all]));
+
   return NextResponse.json({
     users: users.map((u) => ({
       id: u.id,
@@ -30,6 +37,9 @@ export async function GET() {
       email: u.email,
       isActive: u.isActive,
       role: u.role.name,
+      specialty: u.specialty,
+      isAvailable: u.isAvailable,
+      workload: workloadMap.get(u.id) ?? 0,
       createdAt: u.createdAt,
     })),
   });
@@ -44,6 +54,7 @@ export async function POST(request: Request) {
   const email = (body?.email as string | undefined)?.trim().toLowerCase();
   const password = body?.password as string | undefined;
   const roleName = body?.roleName as RoleName | undefined;
+  const specialty = (body?.specialty as string | undefined)?.trim() || null;
 
   if (!name || !email || !password || !roleName) {
     return NextResponse.json({ error: "Ad, e-posta, şifre ve rol zorunludur." }, { status: 400 });
@@ -65,7 +76,7 @@ export async function POST(request: Request) {
   try {
     const hashed = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({
-      data: { name, email, password: hashed, roleId: role.id },
+      data: { name, email, password: hashed, roleId: role.id, specialty: roleName === "TECHNICIAN" ? specialty : null },
     });
     return NextResponse.json({ id: user.id });
   } catch (err) {

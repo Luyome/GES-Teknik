@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { useToast } from "@/components/ui/Toast";
@@ -8,6 +8,13 @@ import { useToast } from "@/components/ui/Toast";
 type TicketStatus = "ASSIGNED" | "OPEN" | "ON_HOLD" | "COMPLETED" | "CANCELLED";
 type Outcome = "APPROVED" | "REJECTED" | "CANCELLED";
 type PartRow = { name: string; price: string };
+type Technician = {
+  id: string;
+  name: string;
+  specialty: string | null;
+  isAvailable: boolean;
+  workload: number;
+};
 
 const fieldClass =
   "w-full rounded-[var(--radius-control)] border border-border bg-surface-2 px-3.5 py-2.5 text-[14px] outline-none focus:ring-2 focus:ring-blue";
@@ -24,18 +31,21 @@ export function StageActions({
   status,
   allowsPartsRequest,
   isUnderWarranty,
+  nextStageRequiresTechnician,
 }: {
   ticketId: string;
   stageName: string;
   status: TicketStatus;
   allowsPartsRequest: boolean;
   isUnderWarranty: boolean | null;
+  nextStageRequiresTechnician: boolean;
 }) {
   const router = useRouter();
   const { showToast } = useToast();
   const [note, setNote] = useState("");
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | undefined>();
+  const [technicianId, setTechnicianId] = useState<string | null>(null);
 
   async function callJson(key: string, path: string, successMessage: string, payload: Record<string, unknown>) {
     setError(undefined);
@@ -128,7 +138,14 @@ export function StageActions({
   if (status !== "OPEN") return null; // COMPLETED / CANCELLED → aksiyon yok
 
   async function submitOutcome(key: string, outcome: Outcome, successMessage: string) {
-    await callWithNote(key, "/transitions", successMessage, { outcome });
+    if (outcome === "APPROVED" && nextStageRequiresTechnician && !technicianId) {
+      setError("Sonraki aşama için havuzdan bir teknisyen seçmelisiniz.");
+      return;
+    }
+    await callWithNote(key, "/transitions", successMessage, {
+      outcome,
+      ...(outcome === "APPROVED" && technicianId ? { technicianId } : {}),
+    });
   }
 
   return (
@@ -137,6 +154,9 @@ export function StageActions({
         Mevcut aşama: <span className="font-medium text-label">{stageName}</span>
       </p>
       {noteField}
+      {nextStageRequiresTechnician && (
+        <TechnicianPicker selectedId={technicianId} onSelect={setTechnicianId} />
+      )}
       {error && <p className="text-[13px] text-red">{error}</p>}
       <div className="flex flex-wrap gap-2">
         <button
@@ -169,6 +189,79 @@ export function StageActions({
         <PartsIssueForm isUnderWarranty={isUnderWarranty} onSubmit={callJson} pending={pending} />
       )}
     </Card>
+  );
+}
+
+// Teknisyen havuzu seçici — sonraki aşamanın sorumlusu Teknisyen olduğunda
+// "Onayla" öncesi zorunlu. Ad, uzmanlık alanı, iş yükü ve müsaitlik
+// durumunu gösterir; müsait olmayan teknisyenler seçilemez.
+function TechnicianPicker({
+  selectedId,
+  onSelect,
+}: {
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  const [technicians, setTechnicians] = useState<Technician[] | null>(null);
+  const [error, setError] = useState<string | undefined>();
+
+  useEffect(() => {
+    fetch("/api/technicians")
+      .then((res) => res.json())
+      .then((data) => setTechnicians(data.technicians ?? []))
+      .catch(() => setError("Teknisyen havuzu yüklenemedi."));
+  }, []);
+
+  return (
+    <div className="space-y-2 rounded-[var(--radius-card)] border border-border p-3">
+      <p className="text-[13px] font-medium">Teknisyen Havuzu — atanacak kişiyi seçin</p>
+      {error && <p className="text-[13px] text-red">{error}</p>}
+      {!technicians ? (
+        <p className="text-label-tertiary text-[13px]">Yükleniyor…</p>
+      ) : technicians.length === 0 ? (
+        <p className="text-label-tertiary text-[13px]">Havuzda teknisyen yok.</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {technicians.map((t) => (
+            <li key={t.id}>
+              <label
+                className={`flex items-center justify-between gap-2 rounded-[var(--radius-control)] border px-3 py-2 text-[13px] ${
+                  !t.isAvailable
+                    ? "border-border opacity-50 cursor-not-allowed"
+                    : selectedId === t.id
+                      ? "border-blue bg-blue/10 cursor-pointer"
+                      : "border-border cursor-pointer hover:bg-surface-2"
+                }`}
+              >
+                <span className="flex items-center gap-2 min-w-0">
+                  <input
+                    type="radio"
+                    name="technicianId"
+                    disabled={!t.isAvailable}
+                    checked={selectedId === t.id}
+                    onChange={() => onSelect(t.id)}
+                  />
+                  <span className="truncate">
+                    <span className="font-medium">{t.name}</span>
+                    {t.specialty && <span className="text-label-secondary"> — {t.specialty}</span>}
+                  </span>
+                </span>
+                <span className="flex items-center gap-1.5 shrink-0">
+                  <span className="text-label-tertiary">{t.workload} iş üzerinde</span>
+                  <span
+                    className={`rounded-[var(--radius-pill)] px-2 py-0.5 text-[11px] font-medium ${
+                      t.isAvailable ? "bg-green/15 text-green" : "bg-red/15 text-red"
+                    }`}
+                  >
+                    {t.isAvailable ? "Çalışıyor" : "Çalışmıyor"}
+                  </span>
+                </span>
+              </label>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

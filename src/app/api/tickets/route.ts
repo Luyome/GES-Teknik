@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { isValidEmail } from "@/lib/validation";
+import { uploadAttachment, AttachmentUploadError } from "@/lib/blob-upload";
+import { sendSimulatedSms } from "@/lib/sms";
 import type { TicketPriority } from "@/generated/prisma/enums";
 
 // Yeni kayıt oluşturma — bilinçli olarak bir Server Action DEĞİL, bir Route
@@ -35,6 +37,10 @@ export async function POST(request: Request) {
   const purchaseDate = purchaseDateRaw ? new Date(purchaseDateRaw) : null;
   const estimatedDeliveryDateRaw = (formData.get("estimatedDeliveryDate") as string | null)?.trim();
   const estimatedDeliveryDate = estimatedDeliveryDateRaw ? new Date(estimatedDeliveryDateRaw) : null;
+  // Garanti kapsamındaysa formda görünen fatura yükleme paneli — bkz.
+  // NewTicketForm.tsx. Opsiyoneldir; girilmezse sonradan ticket detayından
+  // da eklenebilir.
+  const invoiceFile = formData.get("invoiceFile");
 
   if (!customerName || !productInfo || !issueDescription) {
     return NextResponse.json(
@@ -66,7 +72,27 @@ export async function POST(request: Request) {
       userId: session.user.id,
     });
 
-    return NextResponse.json({ id: ticket.id });
+    let invoiceWarning: string | undefined;
+    if (invoiceFile instanceof File && invoiceFile.size > 0) {
+      try {
+        await uploadAttachment({
+          ticketId: ticket.id,
+          userId: session.user.id,
+          file: invoiceFile,
+          type: "INVOICE",
+          note: "Kayıt oluşturulurken yüklendi.",
+        });
+      } catch (err) {
+        // Fatura yüklenemese bile kayıt oluşturulmuş olsun — kullanıcıya
+        // uyarı döndürülür, sonradan ticket detayından tekrar denenebilir.
+        invoiceWarning =
+          err instanceof AttachmentUploadError
+            ? err.message
+            : `Fatura yüklenemedi: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    }
+
+    return NextResponse.json({ id: ticket.id, invoiceWarning });
   } catch (err) {
     console.error("[POST /api/tickets] error:", err);
     return NextResponse.json(
@@ -136,7 +162,7 @@ async function createTicketWithRetry(input: CreateTicketInput) {
         });
         const code = `GES-${year}-${String(ticketCountThisYear + 1).padStart(4, "0")}`;
 
-        return tx.ticket.create({
+        const ticket = await tx.ticket.create({
           data: {
             code,
             customerId: customer.id,
@@ -166,6 +192,14 @@ async function createTicketWithRetry(input: CreateTicketInput) {
             },
           },
         });
+
+        await sendSimulatedSms(tx, {
+          ticketId: ticket.id,
+          toPhone: customer.phone,
+          message: `Sayın ${customer.name}, ${ticket.code} kodlu servis kaydınız oluşturulmuştur. Süreç boyunca SMS ile bilgilendirileceksiniz.`,
+        });
+
+        return ticket;
       });
     } catch (err) {
       // Prisma unique constraint hatası (P2002) → code çakışması, yeniden dene.

@@ -39,8 +39,24 @@ export function getTicketById(id: string) {
         include: { user: true },
         orderBy: { createdAt: "desc" },
       },
+      // SMS bildirim simülasyonu — bkz. src/lib/sms.ts.
+      smsLogs: {
+        orderBy: { createdAt: "asc" },
+      },
     },
   });
+}
+
+// Bir aşamanın hemen sonraki aktif aşamasının sorumlu rolü Teknisyen mi —
+// "Onayla" ile geçerken havuzdan seçim gerekip gerekmediğini belirlemek
+// için (bkz. StageActions'taki teknisyen seçici).
+export async function getNextStageRequiresTechnician(afterOrder: number) {
+  const nextStage = await prisma.stage.findFirst({
+    where: { isActive: true, order: { gt: afterOrder } },
+    orderBy: { order: "asc" },
+    include: { responsibleRole: true },
+  });
+  return nextStage?.responsibleRole.name === "TECHNICIAN";
 }
 
 // "Müşteri Onayladı" butonunu hangi rolün kapatabileceğini belirler —

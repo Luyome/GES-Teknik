@@ -89,10 +89,32 @@ async function main() {
 
   // Onaylı akış sistemini farklı personel rolleriyle test edebilmek için,
   // aşamaların sorumlu olduğu her role (ADMIN hariç) birer örnek kullanıcı
-  // upsert edilir — idempotent, tekrar çalıştırmak güvenli.
-  const DEMO_USERS: { role: (typeof ROLES)[number]; name: string; email: string }[] = [
+  // upsert edilir — idempotent, tekrar çalıştırmak güvenli. Teknisyen
+  // havuzunu (uzmanlık/müsaitlik/iş yükü) anlamlı test edebilmek için
+  // birden fazla teknisyen — biri bilerek "Çalışmıyor" (isAvailable: false).
+  const DEMO_USERS: {
+    role: (typeof ROLES)[number];
+    name: string;
+    email: string;
+    specialty?: string;
+    isAvailable?: boolean;
+  }[] = [
     { role: "SERVICE_MANAGER", name: "Servis Sorumlusu", email: "servis@gesteknik.com" },
-    { role: "TECHNICIAN", name: "Teknisyen", email: "teknisyen@gesteknik.com" },
+    { role: "TECHNICIAN", name: "Ahmet Yılmaz", email: "ahmet.yilmaz@gesteknik.com", specialty: "İnvertör Uzmanı" },
+    { role: "TECHNICIAN", name: "Mehmet Kaya", email: "mehmet.kaya@gesteknik.com", specialty: "Panel Uzmanı" },
+    {
+      role: "TECHNICIAN",
+      name: "Ayşe Demir",
+      email: "ayse.demir@gesteknik.com",
+      specialty: "Elektrik Tesisatı",
+    },
+    {
+      role: "TECHNICIAN",
+      name: "Fatma Şahin",
+      email: "fatma.sahin@gesteknik.com",
+      specialty: "Genel Bakım",
+      isAvailable: false, // izinli/müsait değil senaryosunu test etmek için
+    },
     { role: "QUALITY_CONTROL", name: "Kalite Kontrol", email: "kalitekontrol@gesteknik.com" },
   ];
   const demoPassword = process.env.SEED_DEMO_PASSWORD ?? "GesTeknik2026!";
@@ -100,18 +122,21 @@ async function main() {
   for (const demo of DEMO_USERS) {
     await prisma.user.upsert({
       where: { email: demo.email },
-      update: {},
+      update: { specialty: demo.specialty ?? null, isAvailable: demo.isAvailable ?? true },
       create: {
         name: demo.name,
         email: demo.email,
         password: demoHashed,
         roleId: roleRecords.get(demo.role)!,
+        specialty: demo.specialty ?? null,
+        isAvailable: demo.isAvailable ?? true,
       },
     });
   }
-  console.log(
-    `Örnek kullanıcılar hazır (şifre: ${demoPassword}): ${DEMO_USERS.map((d) => d.email).join(", ")}`
-  );
+  console.log(`Örnek kullanıcılar hazır (şifre: ${demoPassword}):`);
+  for (const demo of DEMO_USERS) {
+    console.log(`  - ${demo.name} <${demo.email}>${demo.specialty ? ` — ${demo.specialty}` : ""}`);
+  }
 
   console.log("Seed tamamlandı: roller ve aşamalar oluşturuldu.");
 }

@@ -33,15 +33,20 @@ model Role {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  name      String
-  email     String   @unique
-  password  String // hash (Auth.js Credentials provider ile kullanılacak)
-  roleId    String
-  role      Role     @relation(fields: [roleId], references: [id])
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  name        String
+  email       String   @unique
+  password    String // hash (Auth.js Credentials provider ile kullanılacak)
+  roleId      String
+  role        Role     @relation(fields: [roleId], references: [id])
+  isActive    Boolean  @default(true)
+  // Teknisyen havuzu için: uzmanlık alanı ve kısa vadeli müsaitlik durumu
+  // (isActive'den bağımsız — hesap aktif olsa da şu an izinli/meşgul
+  // olabilir). Sadece TECHNICIAN rolünde anlamlıdır ama genel tutulur.
+  specialty   String?
+  isAvailable Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   // Bu kullanıcının sorumlu olduğu aşama tanımları (Stage.responsibleRole üzerinden dolaylı)
   assignedTickets Ticket[]       @relation("AssignedTechnician")
@@ -146,6 +151,7 @@ model Ticket {
   notes          TicketNote[]
   partRequests   PartRequest[]
   attachments    Attachment[]
+  smsLogs        SmsLog[]
   parts          PartUsage[]
 
   @@map("tickets")
@@ -251,6 +257,26 @@ model Attachment {
   createdAt DateTime       @default(now())
 
   @@map("attachments")
+}
+
+// ---------------------------------------------------------------------------
+// SMS Bildirim Simülasyonu — bkz. src/lib/sms.ts. Gerçek bir SMS
+// sağlayıcısına (Netgsm/Twilio vb.) henüz bağlı DEĞİL; her aşama
+// geçişinde bu tabloya bir satır düşer ve ticket detay sayfasında
+// gösterilir, böylece sistemin "her adımda bilgilendirme" davranışı
+// görünür olur. İleride gerçek gönderim eklenecekse sadece sendSimulatedSms
+// fonksiyonunun içi değiştirilecek.
+// ---------------------------------------------------------------------------
+
+model SmsLog {
+  id        String   @id @default(cuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id])
+  toPhone   String?
+  message   String
+  createdAt DateTime @default(now())
+
+  @@map("sms_logs")
 }
 
 // ---------------------------------------------------------------------------

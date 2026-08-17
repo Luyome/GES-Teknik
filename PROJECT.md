@@ -77,6 +77,18 @@ Ayrıca tamamlananlar (Parça Talebi / Garanti Doğrulama — Onaylı Akış Sis
 - [x] Uçtan uca doğrulandı: Kayıt/Giriş ve Ön İnceleme'de "Parça Eksik" gizli → Teknik Değerlendirme'de görünür → garanti dışı kayıtta fiyatsız deneme 400 → iki parça (2000+3000 TL) toplam 5000 TL doğru hesaplandı → parçayı isteyen Teknisyen "Müşteri Onayladı" diyemedi (403) → Ön İnceleme (Servis Sorumlusu) onayladı → garanti kapsamındaki kayıtta fiyatsız parça talebi sorunsuz oluşturuldu.
 - [ ] Migration (`20260817130600_parca_talebi_garanti_fatura`) additive, aynı paylaşılan Neon DB'ye sorunsuz uygulandı.
 
+Ayrıca tamamlananlar (Teknisyen Havuzu, SMS Simülasyonu, Koşullu Fatura Yükleme — 2026-08-17):
+- [x] **Teknisyen havuzu** — `User.specialty` (uzmanlık alanı) ve `User.isAvailable` (kısa vadeli müsaitlik — hesap Aktif/Pasif'ten ayrı) eklendi. Sorumlusu Teknisyen olan **her** aşamaya "Onayla" ile geçilirken (`/api/tickets/[id]/transitions`), havuzdan belirli bir teknisyen seçmek zorunlu — `src/lib/data/technicians.ts` (`getTechnicianPool`, iş yükünü `Ticket.assignedTechnicianId` üzerinden canlı hesaplar) ve `/api/technicians` (herkese açık, salt okunur).
+- [x] **Atama sıkılaştırması** — `src/lib/stage-auth.ts` (`checkStageAuthorization`, ortak yardımcı): Teknisyen sorumluluğundaki bir aşamada `assignedTechnicianId` doluysa **sadece o kişi** (+ADMIN) işlem yapabilir, aynı roldeki başka teknisyenler 403 alır — havuzdan atamanın anlamı korunuyor.
+- [x] **SMS bildirim simülasyonu** — yeni `SmsLog` tablosu + `src/lib/sms.ts` (`sendSimulatedSms`). Kayıt oluşturma dahil **her** aşama geçişinde (Kabul/Onay/Red/İptal/Parça Eksik/Müşteri Onayı) müşteriye simüle bir SMS "gönderilir" (gerçek sağlayıcıya bağlı değil — sadece DB'ye loglanır + konsola yazılır), ticket detayında "SMS Bildirimleri" kartında görünür.
+- [x] **Koşullu fatura yükleme** — Yeni Kayıt formunda "Garanti Kapsamında mı?" = Evet seçilince fatura dosya input'u anında beliriyor; kayıt oluşturulurken aynı istekte yüklenir (`src/lib/blob-upload.ts` — hem burada hem ticket detayındaki ek yüklemede kullanılan ortak yardımcı). Blob Store bağlı değilse kayıt yine oluşur, sadece bir uyarı döner.
+- [x] **Örnek teknisyen havuzu** (`prisma/seed.ts`) — 4 teknisyen, farklı uzmanlık alanlarıyla (şifre hepsinde `GesTeknik2026!`):
+  - Ahmet Yılmaz `ahmet.yilmaz@gesteknik.com` — İnvertör Uzmanı
+  - Mehmet Kaya `mehmet.kaya@gesteknik.com` — Panel Uzmanı
+  - Ayşe Demir `ayse.demir@gesteknik.com` — Elektrik Tesisatı
+  - Fatma Şahin `fatma.sahin@gesteknik.com` — Genel Bakım (bilerek "Çalışmıyor" — test senaryosu)
+- [x] Uçtan uca doğrulandı: havuzdan seçim olmadan Onayla 400 → müsait olmayan teknisyen seçimi 400 → seçilen teknisyen dışında biri (aynı rol) kaydı kabul edemiyor (403) → seçilen teknisyen kabul edebiliyor → iş yükü sayacı doğru artıyor → her aşamada SMS logu oluşuyor → garanti kapsamında oluşturulan kayıtta fatura yükleme paneli koşullu açılıyor (Blob bağlı değilse net uyarı, kayıt yine oluşuyor).
+
 Yapılacaklar:
 - [ ] Faz 5'in fiili IIS kurulumu (kullanıcı, admin PowerShell ile `deploy/setup-iis.ps1` çalıştıracak).
 - [ ] Vercel'de bir Blob Store bağlanması (kullanıcı, tek seferlik) — bağlanmadan fotoğraf/dosya eki yükleme çalışmaz.

@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { sendSimulatedSms } from "@/lib/sms";
+import { checkStageAuthorization } from "@/lib/stage-auth";
 
 // "Kabul Et" — bir aşamaya atanan (ASSIGNED) kaydı, o aşamanın sorumlusu
-// (veya ADMIN) üstlenir. Not zorunlu (tam audit trail). Route Handler
-// (Server Action değil) — bkz. src/app/api/tickets/route.ts üstündeki not.
+// (veya ADMIN, ya da havuzdan atanmış belirli teknisyen) üstlenir. Not
+// zorunlu (tam audit trail). Route Handler (Server Action değil) — bkz.
+// src/app/api/tickets/route.ts üstündeki not.
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -25,7 +28,7 @@ export async function POST(
     const result = await prisma.$transaction(async (tx) => {
       const ticket = await tx.ticket.findUnique({
         where: { id: ticketId },
-        include: { currentStage: { include: { responsibleRole: true } } },
+        include: { currentStage: { include: { responsibleRole: true } }, customer: true },
       });
       if (!ticket) return { error: "Kayıt bulunamadı.", status: 404 } as const;
       if (ticket.status !== "ASSIGNED") {
@@ -35,13 +38,14 @@ export async function POST(
         return { error: "Kaydın mevcut bir aşaması yok.", status: 400 } as const;
       }
 
-      const isAdmin = session.user.role === "ADMIN";
-      const isResponsible = session.user.role === ticket.currentStage.responsibleRole.name;
-      if (!isAdmin && !isResponsible) {
-        return {
-          error: `Bu aşamayı yalnızca "${ticket.currentStage.responsibleRole.name}" rolü kabul edebilir.`,
-          status: 403,
-        } as const;
+      const authCheck = checkStageAuthorization({
+        userRole: session.user.role,
+        userId: session.user.id!,
+        stageResponsibleRole: ticket.currentStage.responsibleRole.name,
+        assignedTechnicianId: ticket.assignedTechnicianId,
+      });
+      if (!authCheck.ok) {
+        return { error: authCheck.error, status: 403 } as const;
       }
 
       const updated = await tx.ticket.update({
@@ -56,6 +60,11 @@ export async function POST(
           type: "ACCEPTED",
           note,
         },
+      });
+      await sendSimulatedSms(tx, {
+        ticketId,
+        toPhone: ticket.customer.phone,
+        message: `Sayın ${ticket.customer.name}, ${ticket.code} kodlu kaydınız "${ticket.currentStage.name}" aşamasında işleme alındı.`,
       });
       return { ticket: updated } as const;
     });
