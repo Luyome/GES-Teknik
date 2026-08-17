@@ -19,11 +19,21 @@ const ROLES = [
 ] as const;
 
 // PROJECT.md Bölüm 2'deki örnek aşama zinciri (taslak — saha süreciyle netleştirilecek).
-const STAGES: { name: string; order: number; role: (typeof ROLES)[number] }[] = [
+// allowsPartsRequest: "Parça Eksik" butonu bu aşamada gösterilsin mi —
+// Teknik Değerlendirme'den önce arıza henüz değerlendirilmediği için kapalı.
+// handlesCustomerApproval: "Müşteri Onayladı" butonunu bu aşamanın sorumlusu
+// kapatabilir — müşteri iletişimini/garanti doğrulamasını Ön İnceleme yürütür.
+const STAGES: {
+  name: string;
+  order: number;
+  role: (typeof ROLES)[number];
+  allowsPartsRequest?: boolean;
+  handlesCustomerApproval?: boolean;
+}[] = [
   { name: "Kayıt / Giriş", order: 1, role: "SERVICE_MANAGER" },
-  { name: "Ön İnceleme", order: 2, role: "SERVICE_MANAGER" },
-  { name: "Teknik Değerlendirme", order: 3, role: "TECHNICIAN" },
-  { name: "Onarım / İşlem", order: 4, role: "TECHNICIAN" },
+  { name: "Ön İnceleme", order: 2, role: "SERVICE_MANAGER", handlesCustomerApproval: true },
+  { name: "Teknik Değerlendirme", order: 3, role: "TECHNICIAN", allowsPartsRequest: true },
+  { name: "Onarım / İşlem", order: 4, role: "TECHNICIAN", allowsPartsRequest: true },
   { name: "Kalite Kontrol", order: 5, role: "QUALITY_CONTROL" },
   { name: "Teslim / Çıkış", order: 6, role: "SERVICE_MANAGER" },
 ];
@@ -43,11 +53,18 @@ async function main() {
   for (const stage of STAGES) {
     await prisma.stage.upsert({
       where: { name: stage.name },
-      update: { order: stage.order, responsibleRoleId: roleRecords.get(stage.role)! },
+      update: {
+        order: stage.order,
+        responsibleRoleId: roleRecords.get(stage.role)!,
+        allowsPartsRequest: stage.allowsPartsRequest ?? false,
+        handlesCustomerApproval: stage.handlesCustomerApproval ?? false,
+      },
       create: {
         name: stage.name,
         order: stage.order,
         responsibleRoleId: roleRecords.get(stage.role)!,
+        allowsPartsRequest: stage.allowsPartsRequest ?? false,
+        handlesCustomerApproval: stage.handlesCustomerApproval ?? false,
       },
     });
   }

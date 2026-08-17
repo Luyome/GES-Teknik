@@ -4,13 +4,17 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/Toast";
 
+type AttachmentType = "PHOTO" | "INVOICE" | "OTHER";
+
 // Fotoğraf/dosya eki yükleme formu — bkz. src/app/api/tickets/[id]/attachments/route.ts.
 // Vercel Blob yapılandırılmamışsa (BLOB_READ_WRITE_TOKEN yok) sunucu net bir
-// hata döner, burada gösterilir.
+// hata döner, burada gösterilir. "Fatura" tipi, Ön İnceleme'nin garanti
+// doğrulaması için kullanılır (bkz. ticket detay sayfası).
 export function AttachmentUpload({ ticketId }: { ticketId: string }) {
   const router = useRouter();
   const { showToast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
+  const [type, setType] = useState<AttachmentType>("PHOTO");
   const [note, setNote] = useState("");
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string | undefined>();
@@ -27,6 +31,7 @@ export function AttachmentUpload({ ticketId }: { ticketId: string }) {
     try {
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("type", type);
       if (note.trim()) formData.append("note", note.trim());
       const res = await fetch(`/api/tickets/${ticketId}/attachments`, {
         method: "POST",
@@ -39,7 +44,7 @@ export function AttachmentUpload({ ticketId }: { ticketId: string }) {
       }
       setNote("");
       if (fileRef.current) fileRef.current.value = "";
-      showToast("Dosya eklendi.");
+      showToast(type === "INVOICE" ? "Fatura eklendi." : "Dosya eklendi.");
       router.refresh();
     } catch {
       setError("Bağlantı hatası, lütfen tekrar deneyin.");
@@ -50,6 +55,15 @@ export function AttachmentUpload({ ticketId }: { ticketId: string }) {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-2">
+      <select
+        value={type}
+        onChange={(e) => setType(e.target.value as AttachmentType)}
+        className="rounded-[var(--radius-control)] border border-border bg-surface-2 px-2.5 py-1.5 text-[13px]"
+      >
+        <option value="PHOTO">Fotoğraf</option>
+        <option value="INVOICE">Fatura</option>
+        <option value="OTHER">Diğer</option>
+      </select>
       <input
         ref={fileRef}
         type="file"

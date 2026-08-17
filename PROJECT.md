@@ -67,6 +67,16 @@ Ayrıca tamamlananlar (Onaylı Akış Sistemi — Faz 2'nin genişletilmesi, 202
 - [x] Uçtan uca doğrulandı: kayıt oluşturma → Kabul Et → Parça Eksik → Müşteri Onayladı → Onayla (sonraki aşamaya "Atandı" olarak geçiş) → farklı rolün (Teknisyen) yetkisiz erişimde 403 alması → doğru rolün (Servis Sorumlusu) kabul edebilmesi.
 - [ ] **Önemli mimari not:** dev ve production **aynı Neon veritabanını** paylaşıyor (bkz. Bölüm 9). Bu değişiklikteki migration (`20260817114244_onayli_akis_sistemi`) tamamen additive (yeni enum değeri, yeni nullable kolonlar, yeni tablo) — mevcut veriyi bozmadı, ama gelecekteki şema değişikliklerinde de bu kurala uyulmalı.
 
+Ayrıca tamamlananlar (Parça Talebi / Garanti Doğrulama — Onaylı Akış Sisteminin genişletilmesi, 2026-08-17):
+- [x] **E-posta format doğrulaması** — `src/lib/validation.ts` (`isValidEmail`), hem `NewTicketForm.tsx`'te (client) hem `/api/tickets`'ta (server) uygulanıyor.
+- [x] **Garanti paneli genişletildi** — `Ticket.purchaseDate` ("Satın Alındığı Tarih") eklendi; fatura, mevcut ek yükleme sistemi üzerinden "Fatura" tipiyle (`Attachment.type: INVOICE`) yükleniyor, kayıt detayında 📄 rozetiyle ayrı gösteriliyor.
+- [x] **Parça talebi (`PartRequest`) modeli** — "Parça Eksik" artık hangi parça(lar) eksik + (garanti dışıysa) fiyatını soruyor; birden fazla parça girilebiliyor, toplam otomatik hesaplanıyor (`/api/tickets/[id]/parts-issue`). Garanti kapsamındaysa (`isUnderWarranty: true`) fiyat istenmiyor/ücretsiz.
+- [x] **Aşama bazlı yapılandırma** (`Stage.allowsPartsRequest`, `Stage.handlesCustomerApproval` — Ayarlar'dan işaretlenebilir):
+  - "Parça Eksik" butonu sadece `allowsPartsRequest: true` olan aşamalarda görünür — seed'de Teknik Değerlendirme ve Onarım/İşlem işaretli, Kayıt/Giriş ve Ön İnceleme'de görünmez.
+  - "Müşteri Onayladı" butonu artık currentStage'in sorumlusuna değil, `handlesCustomerApproval: true` işaretli aşamanın (seed'de Ön İnceleme) sorumlu rolüne (+ ADMIN) çıkıyor — parça eksik durumu hangi aşamada tetiklenirse tetiklensin, müşteri iletişimini Ön İnceleme yürütüyor.
+- [x] Uçtan uca doğrulandı: Kayıt/Giriş ve Ön İnceleme'de "Parça Eksik" gizli → Teknik Değerlendirme'de görünür → garanti dışı kayıtta fiyatsız deneme 400 → iki parça (2000+3000 TL) toplam 5000 TL doğru hesaplandı → parçayı isteyen Teknisyen "Müşteri Onayladı" diyemedi (403) → Ön İnceleme (Servis Sorumlusu) onayladı → garanti kapsamındaki kayıtta fiyatsız parça talebi sorunsuz oluşturuldu.
+- [ ] Migration (`20260817130600_parca_talebi_garanti_fatura`) additive, aynı paylaşılan Neon DB'ye sorunsuz uygulandı.
+
 Yapılacaklar:
 - [ ] Faz 5'in fiili IIS kurulumu (kullanıcı, admin PowerShell ile `deploy/setup-iis.ps1` çalıştıracak).
 - [ ] Vercel'de bir Blob Store bağlanması (kullanıcı, tek seferlik) — bağlanmadan fotoğraf/dosya eki yükleme çalışmaz.

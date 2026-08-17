@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { getTicketById } from "@/lib/data/tickets";
+import { getTicketById, getCustomerApprovalRoleName } from "@/lib/data/tickets";
 import { NOTE_TYPE_LABEL, NOTE_TYPE_COLOR } from "@/lib/ticket-note-labels";
 import { auth } from "@/auth";
 import { StageActions } from "./StageActions";
@@ -17,17 +17,34 @@ export default async function TicketDetailPage({
   params,
 }: PageProps<"/tickets/[id]">) {
   const { id } = await params;
-  const [ticket, session] = await Promise.all([getTicketById(id), auth()]);
+  const [ticket, session, customerApprovalRoleName] = await Promise.all([
+    getTicketById(id),
+    auth(),
+    getCustomerApprovalRoleName(),
+  ]);
   if (!ticket) notFound();
 
   const currentStage = ticket.currentStage;
+  const isAdmin = session?.user?.role === "ADMIN";
+  const isStageResponsible = !!currentStage && session?.user?.role === currentStage.responsibleRole.name;
+  // "Müşteri Onayladı" yetkisi currentStage'in sorumlusuna değil, Ayarlar'da
+  // `handlesCustomerApproval` işaretlenmiş aşamanın (ör. Ön İnceleme)
+  // sorumlusuna aittir — parça eksik durumu hangi aşamada tetiklenirse
+  // tetiklensin. Böyle bir aşama tanımlı değilse currentStage'in sorumlusuna
+  // geri düşülür (dead-end önlemek için) — bkz. /api/tickets/[id]/customer-approved.
+  const canResolveCustomerApproval =
+    isAdmin ||
+    (customerApprovalRoleName ? session?.user?.role === customerApprovalRoleName : isStageResponsible);
   const canAct =
     !!currentStage &&
     ticket.status !== "COMPLETED" &&
     ticket.status !== "CANCELLED" &&
-    !!session?.user?.role &&
-    (session.user.role === "ADMIN" ||
-      session.user.role === currentStage.responsibleRole.name);
+    (ticket.status === "ON_HOLD" ? canResolveCustomerApproval : isAdmin || isStageResponsible);
+
+  // ON_HOLD durumundayken müşteriye sunulan en son "Parça Eksik" talebinin
+  // kalem/fiyat detayları — ticket.notes zaten createdAt asc sıralı.
+  const latestPartsIssueNote = [...ticket.notes].reverse().find((n) => n.type === "PARTS_ISSUE");
+  const latestPartsRequest = latestPartsIssueNote?.partRequests ?? [];
 
   return (
     <div className="space-y-6">
@@ -75,6 +92,14 @@ export default async function TicketDetailPage({
                 ? "Garanti dışı"
                 : "Belirtilmedi"}
           </dd>
+          {ticket.purchaseDate && (
+            <>
+              <dt className="text-label-secondary">Satın Alındığı Tarih</dt>
+              <dd className="text-right font-medium">
+                {ticket.purchaseDate.toLocaleDateString("tr-TR")}
+              </dd>
+            </>
+          )}
           {ticket.estimatedDeliveryDate && (
             <>
               <dt className="text-label-secondary">Tahmini Teslim</dt>
@@ -93,7 +118,42 @@ export default async function TicketDetailPage({
           <h2 className="text-[13px] font-medium text-label-secondary uppercase tracking-wide mb-2">
             Aşama İşlem
           </h2>
-          <StageActions ticketId={ticket.id} stageName={currentStage.name} status={ticket.status} />
+          <StageActions
+            ticketId={ticket.id}
+            stageName={currentStage.name}
+            status={ticket.status}
+            allowsPartsRequest={currentStage.allowsPartsRequest}
+            isUnderWarranty={ticket.isUnderWarranty}
+          />
+        </div>
+      )}
+
+      {ticket.status === "ON_HOLD" && latestPartsRequest.length > 0 && (
+        <div>
+          <h2 className="text-[13px] font-medium text-label-secondary uppercase tracking-wide mb-2">
+            Bekleyen Parça Talebi
+          </h2>
+          <Card className="space-y-1">
+            {latestPartsRequest.map((p) => (
+              <div key={p.id} className="flex items-center justify-between text-[14px]">
+                <span>{p.name}</span>
+                <span className="font-medium">
+                  {p.price !== null ? `₺${Number(p.price).toFixed(2)}` : "Ücretsiz (garanti)"}
+                </span>
+              </div>
+            ))}
+            {latestPartsRequest.some((p) => p.price !== null) && (
+              <div className="flex items-center justify-between text-[14px] font-semibold pt-2 border-t border-border mt-2">
+                <span>Toplam</span>
+                <span>
+                  ₺
+                  {latestPartsRequest
+                    .reduce((sum, p) => sum + (p.price !== null ? Number(p.price) : 0), 0)
+                    .toFixed(2)}
+                </span>
+              </div>
+            )}
+          </Card>
         </div>
       )}
 
@@ -152,14 +212,21 @@ export default async function TicketDetailPage({
             <ul className="space-y-2">
               {ticket.attachments.map((a) => (
                 <li key={a.id} className="flex items-center justify-between gap-2 text-[13px]">
-                  <a
-                    href={a.fileUrl ?? "#"}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-blue truncate"
-                  >
-                    {a.note || a.fileUrl}
-                  </a>
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    {a.type === "INVOICE" && (
+                      <span className="shrink-0 rounded-[var(--radius-pill)] bg-orange/15 text-orange text-[11px] font-medium px-2 py-0.5">
+                        📄 Fatura
+                      </span>
+                    )}
+                    <a
+                      href={a.fileUrl ?? "#"}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-blue truncate"
+                    >
+                      {a.note || a.fileUrl}
+                    </a>
+                  </span>
                   <span className="text-label-tertiary shrink-0">
                     {a.user.name} · {a.createdAt.toLocaleDateString("tr-TR")}
                   </span>

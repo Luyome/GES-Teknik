@@ -48,9 +48,18 @@ export async function PATCH(
       return NextResponse.json({ ok: true });
     }
 
-    const data: { name?: string; isActive?: boolean; responsibleRoleId?: string } = {};
+    const data: {
+      name?: string;
+      isActive?: boolean;
+      responsibleRoleId?: string;
+      allowsPartsRequest?: boolean;
+      handlesCustomerApproval?: boolean;
+    } = {};
     if (typeof body?.name === "string" && body.name.trim()) data.name = body.name.trim();
     if (typeof body?.isActive === "boolean") data.isActive = body.isActive;
+    if (typeof body?.allowsPartsRequest === "boolean") data.allowsPartsRequest = body.allowsPartsRequest;
+    if (typeof body?.handlesCustomerApproval === "boolean")
+      data.handlesCustomerApproval = body.handlesCustomerApproval;
     if (typeof body?.responsibleRoleName === "string") {
       const role = await prisma.role.findUnique({ where: { name: body.responsibleRoleName as RoleName } });
       if (!role) return NextResponse.json({ error: "Geçersiz rol." }, { status: 400 });

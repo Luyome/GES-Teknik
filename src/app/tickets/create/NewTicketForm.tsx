@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { isValidEmail } from "@/lib/validation";
 
 const PRIORITY_OPTIONS: { value: string; label: string }[] = [
   { value: "LOW", label: "Düşük" },
@@ -24,9 +25,14 @@ export function NewTicketForm() {
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(undefined);
+    const formData = new FormData(e.currentTarget);
+    const email = (formData.get("customerEmail") as string | null)?.trim();
+    if (email && !isValidEmail(email)) {
+      setError("Geçersiz e-posta adresi (@ ve alan adı içermeli).");
+      return;
+    }
     setIsPending(true);
     try {
-      const formData = new FormData(e.currentTarget);
       const res = await fetch("/api/tickets", { method: "POST", body: formData });
       const data = await res.json();
       if (!res.ok) {
@@ -134,41 +140,56 @@ export function NewTicketForm() {
         />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="space-y-1.5">
-          <label htmlFor="priority" className="text-[13px] text-label-secondary">
-            Öncelik
-          </label>
-          <select id="priority" name="priority" defaultValue="NORMAL" className={fieldClass}>
-            {PRIORITY_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="space-y-1.5">
-          <label htmlFor="isUnderWarranty" className="text-[13px] text-label-secondary">
-            Garanti Kapsamında mı?
-          </label>
-          <select id="isUnderWarranty" name="isUnderWarranty" defaultValue="" className={fieldClass}>
-            <option value="">Belirtilmedi</option>
-            <option value="true">Evet, garanti kapsamında</option>
-            <option value="false">Hayır, garanti dışı</option>
-          </select>
-        </div>
-        <div className="space-y-1.5">
-          <label htmlFor="estimatedDeliveryDate" className="text-[13px] text-label-secondary">
-            Tahmini Teslim Tarihi (opsiyonel)
-          </label>
-          <input
-            id="estimatedDeliveryDate"
-            name="estimatedDeliveryDate"
-            type="date"
-            className={fieldClass}
-          />
-        </div>
+      <div className="space-y-1.5">
+        <label htmlFor="priority" className="text-[13px] text-label-secondary">
+          Öncelik
+        </label>
+        <select id="priority" name="priority" defaultValue="NORMAL" className={fieldClass}>
+          {PRIORITY_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
       </div>
+
+      <fieldset className="space-y-3 rounded-[var(--radius-card)] border border-border p-4">
+        <legend className="text-[13px] font-medium text-label-secondary px-1">Garanti</legend>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="space-y-1.5">
+            <label htmlFor="isUnderWarranty" className="text-[13px] text-label-secondary">
+              Garanti Kapsamında mı?
+            </label>
+            <select id="isUnderWarranty" name="isUnderWarranty" defaultValue="" className={fieldClass}>
+              <option value="">Belirtilmedi (Ön İnceleme&apos;de teyit edilecek)</option>
+              <option value="true">Evet, garanti kapsamında</option>
+              <option value="false">Hayır, garanti dışı</option>
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="purchaseDate" className="text-[13px] text-label-secondary">
+              Satın Alındığı Tarih (opsiyonel)
+            </label>
+            <input id="purchaseDate" name="purchaseDate" type="date" className={fieldClass} />
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="estimatedDeliveryDate" className="text-[13px] text-label-secondary">
+              Tahmini Teslim Tarihi (opsiyonel)
+            </label>
+            <input
+              id="estimatedDeliveryDate"
+              name="estimatedDeliveryDate"
+              type="date"
+              className={fieldClass}
+            />
+          </div>
+        </div>
+        <p className="text-label-tertiary text-[12px]">
+          Fatura fotoğrafı, kayıt oluşturulduktan sonra kayıt detayındaki &quot;Fotoğraf / Dosya
+          Ekleri&quot; bölümünden &quot;Fatura&quot; olarak yüklenebilir — garanti doğrulaması Ön
+          İnceleme aşamasında yapılır.
+        </p>
+      </fieldset>
 
       {error && <p className="text-[13px] text-red">{error}</p>}
 

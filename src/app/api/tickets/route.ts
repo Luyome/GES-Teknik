@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { isValidEmail } from "@/lib/validation";
 import type { TicketPriority } from "@/generated/prisma/enums";
 
 // Yeni kayıt oluşturma — bilinçli olarak bir Server Action DEĞİL, bir Route
@@ -30,6 +31,8 @@ export async function POST(request: Request) {
   const priority = (formData.get("priority") as TicketPriority | null) ?? "NORMAL";
   const warrantyRaw = formData.get("isUnderWarranty") as string | null;
   const isUnderWarranty = warrantyRaw === "true" ? true : warrantyRaw === "false" ? false : null;
+  const purchaseDateRaw = (formData.get("purchaseDate") as string | null)?.trim();
+  const purchaseDate = purchaseDateRaw ? new Date(purchaseDateRaw) : null;
   const estimatedDeliveryDateRaw = (formData.get("estimatedDeliveryDate") as string | null)?.trim();
   const estimatedDeliveryDate = estimatedDeliveryDateRaw ? new Date(estimatedDeliveryDateRaw) : null;
 
@@ -38,6 +41,9 @@ export async function POST(request: Request) {
       { error: "Müşteri adı, ürün bilgisi ve arıza tanımı zorunludur." },
       { status: 400 }
     );
+  }
+  if (customerEmail && !isValidEmail(customerEmail)) {
+    return NextResponse.json({ error: "Geçersiz e-posta adresi." }, { status: 400 });
   }
 
   try {
@@ -55,6 +61,7 @@ export async function POST(request: Request) {
       issueDescription,
       priority,
       isUnderWarranty,
+      purchaseDate,
       estimatedDeliveryDate,
       userId: session.user.id,
     });
@@ -79,6 +86,7 @@ type CreateTicketInput = {
   issueDescription: string;
   priority: TicketPriority;
   isUnderWarranty: boolean | null;
+  purchaseDate: Date | null;
   estimatedDeliveryDate: Date | null;
   userId: string;
 };
@@ -135,6 +143,7 @@ async function createTicketWithRetry(input: CreateTicketInput) {
             productInfo: input.productInfo,
             serialNumber: input.serialNumber || null,
             isUnderWarranty: input.isUnderWarranty,
+            purchaseDate: input.purchaseDate,
             estimatedDeliveryDate: input.estimatedDeliveryDate,
             issueDescription: input.issueDescription,
             priority: input.priority,

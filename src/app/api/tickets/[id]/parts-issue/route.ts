@@ -4,7 +4,18 @@ import { prisma } from "@/lib/prisma";
 
 // "Parça Eksik / Müşteri Onayı Gerekli" — kayıt aynı aşamada kalır, sadece
 // müşteri onayı beklenirken durur (ON_HOLD). Aşama/StageHistory değişmez;
-// sadece TicketNote ile loglanır. Not zorunlu.
+// TicketNote + kalem/fiyat detayları (PartRequest) ile loglanır.
+//
+// Kurallar:
+// - Sadece `Stage.allowsPartsRequest: true` olan aşamalarda çağrılabilir
+//   (ör. Teknik Değerlendirme'den önce arıza henüz değerlendirilmediği
+//   için parça talebi anlamsız).
+// - En az bir parça girilmeli, her parçanın adı zorunlu.
+// - `ticket.isUnderWarranty === true` ise parçalar ücretsizdir (fiyat
+//   istenmez/yok sayılır); aksi halde (garanti dışı/belirtilmemiş) her
+//   parça için pozitif bir fiyat zorunludur.
+type PartInput = { name: string; price?: number };
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -16,9 +27,14 @@ export async function POST(
 
   const { id: ticketId } = await params;
   const body = await request.json().catch(() => null);
-  const note = (body?.note as string | undefined)?.trim();
-  if (!note) {
-    return NextResponse.json({ error: "Not girmek zorunludur." }, { status: 400 });
+  const note = (body?.note as string | undefined)?.trim() || null;
+  const rawParts = Array.isArray(body?.parts) ? (body.parts as PartInput[]) : [];
+  const parts = rawParts
+    .map((p) => ({ name: (p?.name ?? "").toString().trim(), price: p?.price }))
+    .filter((p) => p.name.length > 0);
+
+  if (parts.length === 0) {
+    return NextResponse.json({ error: "En az bir parça girmelisiniz." }, { status: 400 });
   }
 
   try {
@@ -34,6 +50,12 @@ export async function POST(
       if (!ticket.currentStage || !ticket.currentStageId) {
         return { error: "Kaydın mevcut bir aşaması yok.", status: 400 } as const;
       }
+      if (!ticket.currentStage.allowsPartsRequest) {
+        return {
+          error: `"${ticket.currentStage.name}" aşamasında parça talebi oluşturulamaz.`,
+          status: 400,
+        } as const;
+      }
 
       const isAdmin = session.user.role === "ADMIN";
       const isResponsible = session.user.role === ticket.currentStage.responsibleRole.name;
@@ -44,18 +66,52 @@ export async function POST(
         } as const;
       }
 
-      const updated = await tx.ticket.update({
-        where: { id: ticketId },
-        data: { status: "ON_HOLD" },
-      });
-      await tx.ticketNote.create({
+      const underWarranty = ticket.isUnderWarranty === true;
+      let total = 0;
+      const partData: { name: string; price: number | null }[] = [];
+      for (const p of parts) {
+        if (underWarranty) {
+          partData.push({ name: p.name, price: null });
+          continue;
+        }
+        const price = Number(p.price);
+        if (!Number.isFinite(price) || price <= 0) {
+          return {
+            error: `"${p.name}" için geçerli bir fiyat girmelisiniz (garanti kapsamında değil).`,
+            status: 400,
+          } as const;
+        }
+        total += price;
+        partData.push({ name: p.name, price });
+      }
+
+      const summary = underWarranty
+        ? `Parça eksik (garanti kapsamında, ücretsiz): ${partData.map((p) => p.name).join(", ")}.`
+        : `Parça eksik: ${partData.map((p) => `${p.name} (₺${p.price!.toFixed(2)})`).join(", ")} — Toplam: ₺${total.toFixed(2)}.`;
+      const fullNote = note ? `${summary} ${note}` : summary;
+
+      const ticketNote = await tx.ticketNote.create({
         data: {
           ticketId,
           stageId: ticket.currentStageId,
           userId: session.user.id!,
           type: "PARTS_ISSUE",
-          note,
+          note: fullNote,
         },
+      });
+
+      await tx.partRequest.createMany({
+        data: partData.map((p) => ({
+          ticketId,
+          ticketNoteId: ticketNote.id,
+          name: p.name,
+          price: p.price,
+        })),
+      });
+
+      const updated = await tx.ticket.update({
+        where: { id: ticketId },
+        data: { status: "ON_HOLD" },
       });
       return { ticket: updated } as const;
     });

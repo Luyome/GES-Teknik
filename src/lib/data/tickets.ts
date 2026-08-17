@@ -32,7 +32,7 @@ export function getTicketById(id: string) {
       // zorunlu adımın (Atandı/Kabul/Parça Eksik/Müşteri Onayı/Onay/Red/
       // İptal) notuyla birlikte kronolojik kaydı.
       notes: {
-        include: { stage: true, user: true },
+        include: { stage: true, user: true, partRequests: true },
         orderBy: { createdAt: "asc" },
       },
       attachments: {
@@ -41,6 +41,19 @@ export function getTicketById(id: string) {
       },
     },
   });
+}
+
+// "Müşteri Onayladı" butonunu hangi rolün kapatabileceğini belirler —
+// Stage.handlesCustomerApproval: true olarak işaretlenmiş aşamanın
+// sorumlu rolü (bkz. /api/tickets/[id]/customer-approved). Ayarlar'dan
+// hiç işaretlenmemişse null döner (o zaman currentStage'in sorumlusuna
+// geri düşülür).
+export async function getCustomerApprovalRoleName() {
+  const stage = await prisma.stage.findFirst({
+    where: { handlesCustomerApproval: true, isActive: true },
+    include: { responsibleRole: true },
+  });
+  return stage?.responsibleRole.name ?? null;
 }
 
 export async function getDashboardData() {

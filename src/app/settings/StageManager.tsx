@@ -12,6 +12,8 @@ type Stage = {
   name: string;
   order: number;
   isActive: boolean;
+  allowsPartsRequest: boolean;
+  handlesCustomerApproval: boolean;
   responsibleRole: { name: RoleName };
 };
 
@@ -92,6 +94,26 @@ export function StageManager({ stages, isAdmin }: { stages: Stage[]; isAdmin: bo
               </div>
               <div className="text-label-tertiary text-[12px]">
                 {ROLE_LABEL[stage.responsibleRole.name]}
+              </div>
+              <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5">
+                <label className="flex items-center gap-1.5 text-[12px] text-label-secondary">
+                  <input
+                    type="checkbox"
+                    checked={stage.allowsPartsRequest}
+                    disabled={!isAdmin || busyId === stage.id}
+                    onChange={(e) => patchStage(stage.id, { allowsPartsRequest: e.target.checked })}
+                  />
+                  Parça talebi
+                </label>
+                <label className="flex items-center gap-1.5 text-[12px] text-label-secondary">
+                  <input
+                    type="checkbox"
+                    checked={stage.handlesCustomerApproval}
+                    disabled={!isAdmin || busyId === stage.id}
+                    onChange={(e) => patchStage(stage.id, { handlesCustomerApproval: e.target.checked })}
+                  />
+                  Müşteri onayı yetkisi
+                </label>
               </div>
             </div>
             {isAdmin && (

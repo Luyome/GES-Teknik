@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { put } from "@vercel/blob";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import type { AttachmentType } from "@/generated/prisma/enums";
+
+const VALID_TYPES: AttachmentType[] = ["PHOTO", "INVOICE", "OTHER"];
 
 // Fotoğraf/dosya eki yükleme — PROJECT.md Bölüm 4/5 (Attachment modeli).
 // Vercel Blob kullanır. ÖN KOŞUL: Vercel projesinde bir Blob Store
@@ -28,6 +31,10 @@ export async function POST(
   const formData = await request.formData();
   const file = formData.get("file");
   const note = (formData.get("note") as string | null)?.trim() || null;
+  const typeRaw = (formData.get("type") as string | null) ?? "PHOTO";
+  const type: AttachmentType = VALID_TYPES.includes(typeRaw as AttachmentType)
+    ? (typeRaw as AttachmentType)
+    : "PHOTO";
 
   if (!(file instanceof File) || file.size === 0) {
     return NextResponse.json({ error: "Dosya seçilmedi." }, { status: 400 });
@@ -56,11 +63,12 @@ export async function POST(
         ticketId,
         userId: session.user.id,
         fileUrl: blob.url,
+        type,
         note,
       },
     });
 
-    return NextResponse.json({ id: attachment.id, fileUrl: attachment.fileUrl });
+    return NextResponse.json({ id: attachment.id, fileUrl: attachment.fileUrl, type: attachment.type });
   } catch (err) {
     console.error("[POST /api/tickets/[id]/attachments] error:", err);
     return NextResponse.json(

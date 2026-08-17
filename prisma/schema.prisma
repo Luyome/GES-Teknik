@@ -74,13 +74,21 @@ model Customer {
 // ---------------------------------------------------------------------------
 
 model Stage {
-  id                String   @id @default(cuid())
-  name              String   @unique // ör. "Kayıt / Giriş", "Ön İnceleme", ...
-  order             Int      @unique // aşama sırası
-  responsibleRoleId String
-  responsibleRole   Role     @relation(fields: [responsibleRoleId], references: [id])
-  isActive          Boolean  @default(true)
-  createdAt         DateTime @default(now())
+  id                      String   @id @default(cuid())
+  name                    String   @unique // ör. "Kayıt / Giriş", "Ön İnceleme", ...
+  order                   Int      @unique // aşama sırası
+  responsibleRoleId       String
+  responsibleRole         Role     @relation(fields: [responsibleRoleId], references: [id])
+  isActive                Boolean  @default(true)
+  // Bu aşamada "Parça Eksik / Müşteri Onayı Gerekli" butonu gösterilsin mi
+  // (ör. Teknik Değerlendirme'den önce arıza henüz teknik olarak
+  // değerlendirilmediği için parça talebi anlamsız).
+  allowsPartsRequest      Boolean  @default(false)
+  // "Müşteri Onayladı" butonunu bu aşamanın sorumlu rolü mü kapatabilir
+  // (parça eksik durumu hangi aşamada tetiklenirse tetiklensin, müşteri
+  // iletişimini genelde tek bir aşama/rol yürütür — ör. Ön İnceleme).
+  handlesCustomerApproval Boolean  @default(false)
+  createdAt               DateTime @default(now())
 
   ticketsAtStage Ticket[]       @relation("CurrentStage")
   histories      StageHistory[]
@@ -116,6 +124,7 @@ model Ticket {
   productInfo           String // ürün/parça/cihaz bilgisi
   serialNumber          String? // seri no / cihaz kimliği
   isUnderWarranty       Boolean? // garanti kapsamında mı (bilinmiyorsa null)
+  purchaseDate          DateTime? // satın alındığı tarih (garanti doğrulama için)
   estimatedDeliveryDate DateTime? // tahmini teslim tarihi (SLA)
   issueDescription      String // giriş nedeni / arıza tanımı
   priority              TicketPriority @default(NORMAL)
@@ -135,6 +144,7 @@ model Ticket {
 
   stageHistories StageHistory[]
   notes          TicketNote[]
+  partRequests   PartRequest[]
   attachments    Attachment[]
   parts          PartUsage[]
 
@@ -198,22 +208,47 @@ model TicketNote {
   note      String
   createdAt DateTime       @default(now())
 
+  partRequests PartRequest[]
+
   @@map("ticket_notes")
+}
+
+// "Parça Eksik / Müşteri Onayı Gerekli" adımında girilen kalem/fiyat
+// detayları — hangi parçanın eksik olduğu ve (garanti dışıysa) fiyatı.
+// TicketNote(PARTS_ISSUE) ile birlikte oluşturulur, o notun kalemleridir.
+model PartRequest {
+  id           String     @id @default(cuid())
+  ticketId     String
+  ticket       Ticket     @relation(fields: [ticketId], references: [id])
+  ticketNoteId String
+  ticketNote   TicketNote @relation(fields: [ticketNoteId], references: [id])
+  name         String // hangi parça
+  price        Decimal?   @db.Decimal(10, 2) // garanti kapsamındaysa null (ücretsiz)
+  createdAt    DateTime   @default(now())
+
+  @@map("part_requests")
 }
 
 // ---------------------------------------------------------------------------
 // Ekler / Notlar
 // ---------------------------------------------------------------------------
 
+enum AttachmentType {
+  PHOTO
+  INVOICE // fatura — garanti doğrulama için (bkz. Ön İnceleme akışı)
+  OTHER
+}
+
 model Attachment {
-  id        String   @id @default(cuid())
+  id        String         @id @default(cuid())
   ticketId  String
-  ticket    Ticket   @relation(fields: [ticketId], references: [id])
+  ticket    Ticket         @relation(fields: [ticketId], references: [id])
   userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  user      User           @relation(fields: [userId], references: [id])
+  type      AttachmentType @default(PHOTO)
   fileUrl   String?
   note      String?
-  createdAt DateTime @default(now())
+  createdAt DateTime       @default(now())
 
   @@map("attachments")
 }
